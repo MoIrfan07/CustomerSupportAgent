@@ -1,0 +1,8 @@
+deepagents==0.6.12
+langchain
+langgraph
+langchain-mcp-adapters
+fastmcp
+dashscope
+python-dotenv
+streamlit
