@@ -2,24 +2,28 @@ from app.config import QWEN_LANGUAGE
 from app.llm import qwen_model
 
 
-def build_subagents(tools):
+def build_subagents(tools):   #creates subagents and gives them their required tools
+
 
     tool_map = {
-        tool.name: tool
+        tool.name: tool      # converts the list of MCP tools into a dictionary so we can easily get a tool by its name
         for tool in tools
     }
 
-    subagents = []
-
-    # ========================================
+    subagents = []   #list where subagents will be stored
+    
+    
+    
+    
     # CUSTOMER SPECIALIST
-    # ========================================
 
     customer_tools = [
         tool_map["get_customer"],
-        tool_map["get_customer_orders"],
-    ]
+        tool_map["get_customer_orders"],    
+    ]   #gives required tools to the customer specialist subagent
 
+
+#customwr specialist
     customer_specialist = {
 
         "name": "customer_specialist",
@@ -64,21 +68,25 @@ to resolve the correct order.
 Return a concise factual summary to the main agent.
 """,
 
-        "tools": customer_tools,
+        "tools": customer_tools,  
 
         "model": qwen_model,
+        
+        
+        #customer tools & model are assigned to the customer specialist subagent
     }
 
-    subagents.append(customer_specialist)
+    subagents.append(customer_specialist)   #customer specialist subagent is added to the list of subagents
 
-    # ========================================
+
+
+
     # BILLING SPECIALIST
-    # ========================================
 
     billing_tools = [
         tool_map["get_customer_invoices"],
         tool_map["get_customer_payments"],
-    ]
+    ]   #same as above but for billing specialist subagent
 
     billing_specialist = {
 
@@ -134,13 +142,13 @@ Return a concise factual summary to the main agent.
 
     subagents.append(billing_specialist)
 
-    # ========================================
+
+
     # TECHNICAL SPECIALIST
-    # ========================================
 
     technical_tools = [
         tool_map["get_customer_tickets"],
-    ]
+    ] #same as above but for technical specialist subagent
 
     technical_specialist = {
 
@@ -186,21 +194,19 @@ Return a concise factual summary to the main agent.
 
     subagents.append(technical_specialist)
 
-    # ========================================
+
+
+
     # OPERATIONS SPECIALIST
-    # ========================================
 
-    operations_tools = []
-
-    if "refund_payment" in tool_map:
-        operations_tools.append(
-            tool_map["refund_payment"]
-        )
-
-    if "cancel_order" in tool_map:
-        operations_tools.append(
-            tool_map["cancel_order"]
-        )
+    operations_tools = []  #init operations tools list
+    operations_tools = [
+        tool_map["refund_payment"],
+        tool_map["cancel_order"],
+    ]
+    
+    
+# gives the Operations Specialist both operation tools
 
     if operations_tools:
 

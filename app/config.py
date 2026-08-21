@@ -10,7 +10,7 @@ load_dotenv()
 # QWEN CONFIGURATION
 # ============================================
 
-QWEN_MODEL = "deepseek-v4-pro-0813"
+QWEN_MODEL = "qwen-flash-character"
 #qwen-flash-character (old model)
 
 QWEN_LANGUAGE = "English"

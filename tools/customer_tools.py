@@ -4,7 +4,7 @@ import re
 CUSTOMERS = {
     "CUST-1001": {
         "customer_id": "CUST-1001",
-        "name": "Ahmed Khan",
+        "name": "AhmedKhan",
         "email": "ahmed@example.com",
         "status": "Active",
         "plan": "Premium",
@@ -17,6 +17,13 @@ CUSTOMERS = {
         "status": "Suspended",
         "plan": "Basic",
     },
+    "CUST-1003": {
+            "customer_id": "CUST-1003",
+            "name": "Jane Doe",
+            "email": "jane@example.com",
+            "status": "Active",
+            "plan": "Premium",
+        },
 }
 
 
