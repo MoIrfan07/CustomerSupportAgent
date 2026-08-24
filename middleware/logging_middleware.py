@@ -8,24 +8,21 @@ from langchain.agents.middleware import (
 
 class CustomerSupportLoggingMiddleware(
     AgentMiddleware
-):
+):    #custom middleware for logging requests and responses in the customer support agent
 
-    def _timestamp(self) -> str:
+    def _timestamp(self) -> str:   #timestamp for logging purposes
 
         return datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S"
         )
 
-
-    # ========================================
-    # BEFORE MODEL
-    # ========================================
+    # BEFORE MODEL  
 
     def before_model(
         self,
         state: dict[str, Any],
         runtime: Any,
-    ):
+    ):   #logs the request before it is sent to the model
 
         messages = state.get(
             "messages",
@@ -70,15 +67,15 @@ class CustomerSupportLoggingMiddleware(
         return None
 
 
-    # ========================================
+
+
     # AFTER MODEL
-    # ========================================
 
     def after_model(
         self,
         state: dict[str, Any],
         runtime: Any,
-    ):
+    ):   #logs the response after it is received from the model
 
         messages = state.get(
             "messages",

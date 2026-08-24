@@ -8,9 +8,7 @@ mcp = FastMCP(
 )
 
 
-# ============================================
 # REFUND TOOL
-# ============================================
 
 @mcp.tool
 def refund_payment(
@@ -59,9 +57,7 @@ def refund_payment(
                     )
                 }
 
-            # --------------------------------
-            # SIMULATED REFUND
-            # --------------------------------
+        
 
             return {
                 "success": True,
@@ -98,9 +94,10 @@ def get_resolved_customer_id(
         "customer_id"
     ]
 
-# ============================================
+
+
+
 # CUSTOMER DATABASE
-# ============================================
 
 CUSTOMERS = {
 
@@ -122,9 +119,7 @@ CUSTOMERS = {
 
 }
 
-# ============================================
-# CUSTOMER REFERENCE NORMALIZATION
-# ============================================
+
 
 def normalize_customer_reference(
     value: str,
@@ -200,10 +195,6 @@ def resolve_customer_reference(
             matches.append(customer)
 
 
-    # ========================================
-    # NO MATCH
-    # ========================================
-
     if not matches:
 
         return {
@@ -214,10 +205,6 @@ def resolve_customer_reference(
             ),
         }
 
-
-    # ========================================
-    # MULTIPLE MATCHES
-    # ========================================
 
     if len(matches) > 1:
 
@@ -238,9 +225,6 @@ def resolve_customer_reference(
         }
 
 
-    # ========================================
-    # SINGLE MATCH
-    # ========================================
 
     customer = matches[0]
 
@@ -359,9 +343,6 @@ TICKETS = {
 
 }
 
-# ============================================
-# CUSTOMER RESOLVER TOOL
-# ============================================
 
 @mcp.tool
 def resolve_customer(
@@ -382,9 +363,11 @@ def resolve_customer(
     return resolve_customer_reference(
         customer_reference
     )
-# ============================================
+    
+    
+    
+    
 # CUSTOMER TOOL
-# ============================================
 
 @mcp.tool
 def get_customer(
@@ -422,9 +405,10 @@ def get_customer(
     ]
 
 
-# ============================================
+
+
+
 # ORDER TOOL
-# ============================================
 
 @mcp.tool
 def get_customer_orders(
@@ -459,9 +443,7 @@ def get_customer_orders(
     
     
     
-    # ============================================
 # CANCEL ORDER TOOL
-# ============================================
 
 @mcp.tool
 def cancel_order(
@@ -478,9 +460,7 @@ def cancel_order(
     cannot be cancelled.
     """
 
-    # ========================================
-    # RESOLVE CUSTOMER
-    # ========================================
+ 
 
     resolved_id = get_resolved_customer_id(
         customer_id
@@ -496,18 +476,12 @@ def cancel_order(
             ),
         }
 
-    # ========================================
-    # FIND CUSTOMER ORDERS
-    # ========================================
 
     customer_orders = ORDERS.get(
         resolved_id,
         []
     )
 
-    # ========================================
-    # FIND ORDER
-    # ========================================
 
     order = next(
         (
@@ -528,9 +502,7 @@ def cancel_order(
             ),
         }
 
-    # ========================================
-    # CHECK ORDER STATUS
-    # ========================================
+
 
     if order["status"] != "Processing":
 
@@ -546,9 +518,7 @@ def cancel_order(
             "current_status": order["status"],
         }
 
-    # ========================================
-    # CANCEL ORDER
-    # ========================================
+
 
     order["status"] = "Cancelled"
 
@@ -564,9 +534,10 @@ def cancel_order(
         "amount": order["amount"],
         "status": order["status"],
     }
-# ============================================
+    
+    
+    
 # INVOICE TOOL
-# ============================================
 
 @mcp.tool
 def get_customer_invoices(
@@ -598,9 +569,11 @@ def get_customer_invoices(
         []
     )
 
-# ============================================
+
+
+
+
 # PAYMENT TOOL
-# ============================================
 
 @mcp.tool
 def get_customer_payments(
@@ -632,9 +605,10 @@ def get_customer_payments(
         resolved_id,
         []
     )
-# ============================================
+    
+    
+    
 # SUPPORT TICKET TOOL
-# ============================================
 
 @mcp.tool
 def get_customer_tickets(
@@ -666,9 +640,9 @@ def get_customer_tickets(
         resolved_id,
         []
     )
-# ============================================
-# RUN MCP SERVER
-# ============================================
+    
+    
+    
 
 if __name__ == "__main__":
 

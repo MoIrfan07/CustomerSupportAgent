@@ -8,6 +8,8 @@ from agents.main_agent import (
     create_customer_support_agent,
 )
 
+from app.mcp_client import get_mcp_tools
+
 
 # ============================================
 # FASTAPI APP
@@ -38,18 +40,23 @@ app.add_middleware(
 # ============================================
 # AGENT
 # ============================================
-
+USER_ROLE = "manager"  # default user role for the agent, can be changed based on the application context
 agent = None
+@app.get("/config")
+async def config():
 
+    return {
+        "user_role": USER_ROLE,
+    }
 
-async def get_agent():
+async def get_agent(user_role: str ):
 
     global agent
 
     if agent is None:
 
-        agent = (
-            await create_customer_support_agent()
+        agent = await create_customer_support_agent(
+            user_role= USER_ROLE
         )
 
     return agent
@@ -71,8 +78,10 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
 
     response: str
-
+    user_role : str
     customer: dict[str, Any] | None = None
+    
+    
 
     activities: list[dict[str, Any]] = []
 
@@ -81,6 +90,48 @@ class ChatResponse(BaseModel):
     approval_message: str | None = None
 
 
+
+# ============================================
+# CUSTOMERS
+# ============================================
+
+@app.get("/customers")
+async def get_customers():
+
+    # Get the MCP tools available to the application
+    tools = await get_mcp_tools()
+
+    # Find the customer tool
+    get_customer_tool = next(
+        tool
+        for tool in tools
+        if tool.name == "get_customer"
+    )
+
+    # Customer IDs that should appear
+    # in the Customers tab
+    customer_ids = [
+        "CUST-1001",
+        "CUST-1002",
+        "CUST-1003",
+    ]
+
+    customers = []
+
+    # Retrieve each customer through the MCP tool
+    for customer_id in customer_ids:
+
+        result = await get_customer_tool.ainvoke(
+            {
+                "customer_id": customer_id
+            }
+        )
+
+        customers.append(result)
+
+    return {
+        "customers": customers
+    }
 # ============================================
 # HEALTH CHECK
 # ============================================
@@ -106,9 +157,8 @@ async def chat(
     request: ChatRequest,
 ):
 
-    customer_agent = (
-        await get_agent()
-    )
+    customer_agent = await get_agent(user_role=USER_ROLE)
+    
 
     config = {
         "configurable": {
@@ -144,8 +194,10 @@ async def chat(
 
         return ChatResponse(
             response="",
+            user_role=USER_ROLE,
             activities=[
                 {
+                    "id": 1,
                     "label": "Human approval required",
                     "type": "approval",
                     "status": "waiting",
@@ -188,8 +240,10 @@ async def chat(
 
     return ChatResponse(
         response=str(content),
+        user_role=USER_ROLE,
         activities=[
             {
+                "id": 1,
                 "label": "Request completed",
                 "type": "success",
                 "status": "completed",

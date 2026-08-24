@@ -1,4 +1,4 @@
-import asyncio
+import asyncio #to run the asynchronous main function
 
 from langgraph.types import Command
 #from langgraph.errors import GraphInterrupt
@@ -8,29 +8,27 @@ from agents.main_agent import (
 )
 
 
-CONFIG = {
+CONFIG = { 
     "configurable": {
-        "thread_id": "customer-support-session"
+        "thread_id": "customer-support-session"  #thread ID for the customer support session, used to maintain conversation context
     }
 }
 
 
 async def main():
 
-    # ========================================
     # CREATE AGENT
-    # ========================================
 
     agent = (
-        await create_customer_support_agent()
+        await create_customer_support_agent(
+            user_role="manager"  #user role passed to the agent creation function
+        )
     )
 
 
-    # ========================================
     # CONVERSATION HISTORY
-    # ========================================
 
-    messages = []
+    messages = [] #store the conversation history between the user and the agent
 
 
     print()
@@ -47,15 +45,12 @@ async def main():
     print()
 
 
-    # ========================================
-    # CHAT LOOP
-    # ========================================
-
+    # CHAT 
     while True:
 
         try:
 
-            user_input = input(
+            user_input = input( 
                 "You: "
             ).strip()
 
@@ -70,10 +65,7 @@ async def main():
 
             break
 
-
-        # ------------------------------------
         # EXIT
-        # ------------------------------------
 
         if user_input.lower() in {
             "exit",
@@ -87,24 +79,20 @@ async def main():
             break
 
 
-        # ------------------------------------
         # EMPTY INPUT
-        # ------------------------------------
 
         if not user_input:
             continue
 
 
-        # ------------------------------------
         # ADD USER MESSAGE
-        # ------------------------------------
 
         messages.append(
             {
                 "role": "user",
                 "content": user_input,
             }
-        )
+        ) #adds the user's message to the conversation history, which will be sent to the agent for processing
 
 
         print(
@@ -114,9 +102,7 @@ async def main():
 
         try:
 
-            # =================================
             # START / CONTINUE AGENT
-            # =================================
 
             result = await agent.ainvoke(
                 {
@@ -126,9 +112,7 @@ async def main():
             )
 
 
-            # =================================
             # CHECK FOR INTERRUPT
-            # =================================
 
             interrupts = (
                 result.get("__interrupt__")
@@ -145,10 +129,8 @@ async def main():
                     interrupt_value
                 )
 
-
-                # -----------------------------
-                # ASK HUMAN
-                # -----------------------------
+    
+                # ASK HUMAN FOR APPROVAL
 
                 approval = input(
                     "\nApprove this action? "
@@ -162,9 +144,7 @@ async def main():
                 }
 
 
-                # -----------------------------
                 # RESUME AGENT
-                # -----------------------------
 
                 result = await agent.ainvoke(
                     Command(
@@ -174,18 +154,13 @@ async def main():
                 )
 
 
-            # =================================
             # UPDATE HISTORY
-            # =================================
 
             messages = result[
                 "messages"
             ]
 
-
-            # =================================
             # FINAL RESPONSE
-            # =================================
 
             if messages:
 

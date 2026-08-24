@@ -6,11 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# ============================================
-# QWEN CONFIGURATION
-# ============================================
 
-QWEN_MODEL = "qwen-flash-character"
+QWEN_MODEL = "deepseek-v4-flash"
 #qwen-flash-character (old model)
 
 QWEN_LANGUAGE = "English"
@@ -29,9 +26,7 @@ QWEN_COMPATIBLE_BASE_URL = (
 )
 
 
-# ============================================
 # API KEY
-# ============================================
 
 QWEN_API_KEY = os.getenv(
     "DASHSCOPE_API_KEY"

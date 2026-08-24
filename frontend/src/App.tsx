@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Bot,
   Send,
@@ -27,8 +27,8 @@ type Message = {
 type ActivityItem = {
   id: number;
   label: string;
-  type: "tool" | "agent" | "success";
-  status: "running" | "completed";
+  type: "tool" | "agent" | "success" | "approval";
+  status: "running" | "completed" | "waiting";
 };
 
 const initialMessages: Message[] = [
@@ -43,12 +43,50 @@ const initialMessages: Message[] = [
 function App() {
   const [messages, setMessages] =
     useState<Message[]>(initialMessages);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const [input, setInput] = useState("");
 
   const [loading, setLoading] =
     useState(false);
 
+  const [userRole, setUserRole] =
+    useState("");
+
+  const displayRole =
+    userRole.charAt(0).toUpperCase() +
+    userRole.slice(1);
+  useEffect(() => {
+
+    const fetchUserRole = async () => {
+
+      try {
+
+        const response = await fetch(
+          "http://127.0.0.1:8000/config"
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch user role");
+        }
+
+        const data = await response.json();
+
+        setUserRole(data.user_role);
+
+      } catch (error) {
+
+        console.error(
+          "Failed to fetch user role:",
+          error
+        );
+
+      }
+    };
+
+    fetchUserRole();
+
+  }, []);
   const [activities, setActivities] =
     useState<ActivityItem[]>([]);
 
@@ -59,7 +97,15 @@ function App() {
       status: "—",
       plan: "—",
     });
+  useEffect(() => {
+    console.log("Current customer:", customer.name);
+  }, [customer]);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [messages, loading]);
   const sendMessage = async () => {
     const text = input.trim();
 
@@ -128,7 +174,7 @@ function App() {
       }
 
       const data = await response.json();
-
+      setUserRole(data.user_role);
       setMessages((previous) => [
         ...previous,
         {
@@ -262,11 +308,11 @@ function App() {
           <div className="role-card">
 
             <div className="role-avatar">
-              M
+              {displayRole.charAt(0).toUpperCase()}
             </div>
 
             <div className="role-info">
-              <strong>Manager</strong>
+              <strong>{displayRole}</strong>
               <span>Authorized user</span>
             </div>
 
@@ -309,12 +355,12 @@ function App() {
 
             <div className="security-badge">
               <ShieldCheck size={16} />
-              Manager access
+              {displayRole} access
             </div>
 
             <div className="profile">
               <div className="profile-avatar">
-                M
+                {displayRole.charAt(0).toUpperCase()}
               </div>
             </div>
 
@@ -338,7 +384,7 @@ function App() {
                 </span>
 
                 <h2>
-                  Customer investigation
+                  Customer Investigation
                 </h2>
               </div>
 
@@ -421,7 +467,7 @@ function App() {
                 </div>
 
               )}
-
+              <div ref={messagesEndRef} />
             </div>
 
 
@@ -470,7 +516,7 @@ function App() {
 
             {/* CUSTOMER */}
 
-            <div className="panel-card">
+            {/* <div className="panel-card">
 
               <div className="panel-title">
                 <span>
@@ -516,7 +562,7 @@ function App() {
 
               </div>
 
-            </div>
+            </div> */}
 
 
             {/* QUICK STATS */}
@@ -567,7 +613,7 @@ function App() {
               <div className="panel-title">
 
                 <span>
-                  AGENT ACTIVITY
+                  ACTIVITY
                 </span>
 
                 <Activity size={16} />
@@ -581,7 +627,7 @@ function App() {
                   0 ? (
 
                   <div className="empty-activity">
-                    Agent activity will appear here.
+                    Activities will appear here.
                   </div>
 
                 ) : (
@@ -596,11 +642,10 @@ function App() {
 
                         <div className="activity-icon">
 
-                          {activity.status ===
-                            "completed" ? (
-                            <CheckCircle2
-                              size={15}
-                            />
+                          {activity.status === "completed" ? (
+                            <CheckCircle2 size={15} />
+                          ) : activity.status === "waiting" ? (
+                            <ShieldCheck size={15} />
                           ) : (
                             <Loader2
                               size={15}
@@ -616,13 +661,13 @@ function App() {
                           </strong>
 
                           <span>
-                            {activity.type ===
-                              "tool"
+                            {activity.type === "tool"
                               ? "MCP tool"
-                              : activity.type ===
-                                "agent"
+                              : activity.type === "agent"
                                 ? "Agent"
-                                : "Completed"}
+                                : activity.type === "approval"
+                                  ? "Approval"
+                                  : "Completed"}
                           </span>
                         </div>
 
