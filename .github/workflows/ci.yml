@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Nightly run of the live-LLM integration suite only.
+    - cron: "0 3 * * *"
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run unit/component tests
+        env:
+          JWT_SECRET_KEY: ${{ secrets.TEST_JWT_SECRET_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.TEST_DASHSCOPE_API_KEY }}
+          TEST_AHMED_PASSWORD: ${{ secrets.TEST_AHMED_PASSWORD }}
+        run: pytest -v
+        # pytest.ini excludes tests marked `integration` by default.
+
+  integration-tests:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run live-LLM integration tests
+        env:
+          JWT_SECRET_KEY: ${{ secrets.TEST_JWT_SECRET_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.TEST_DASHSCOPE_API_KEY }}
+          TEST_AHMED_PASSWORD: ${{ secrets.TEST_AHMED_PASSWORD }}
+        run: pytest -v -m integration
