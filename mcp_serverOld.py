@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
-from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
@@ -16,22 +14,122 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 
+
 mcp = FastMCP("Customer Support MCP Server")
+
 
 # ============================================================
 # CUSTOMER DATABASE
 # ============================================================
 
-DATA_PATH = Path(__file__).resolve().parent / "data" / "customer_data.json"
+CUSTOMERS = {
+    "CUST-1001": {
+        "customer_id": "CUST-1001",
+        "name": "Ahmed Khan",
+        "email": "ahmed@example.com",
+        "status": "Active",
+        "plan": "Premium",
+    },
+    "CUST-1002": {
+        "customer_id": "CUST-1002",
+        "name": "John Smith",
+        "email": "john@example.com",
+        "status": "Suspended",
+        "plan": "Basic",
+    },
+}
 
-with DATA_PATH.open("r", encoding="utf-8") as file:
-    DATA = json.load(file)
 
-CUSTOMERS = DATA["customers"]
-ORDERS = DATA["orders"]
-INVOICES = DATA["invoices"]
-PAYMENTS = DATA["payments"]
-TICKETS = DATA["tickets"]
+ORDERS = {
+    "CUST-1001": [
+        {
+            "order_id": "ORD-5001",
+            "product": "Laptop",
+            "amount": 4200,
+            "status": "Delivered",
+        },
+        {
+            "order_id": "ORD-5002",
+            "product": "Monitor",
+            "amount": 850,
+            "status": "Processing",
+        },
+    ],
+    "CUST-1002": [
+        {
+            "order_id": "ORD-5003",
+            "product": "Keyboard",
+            "amount": 250,
+            "status": "Cancelled",
+        }
+    ],
+}
+
+
+INVOICES = {
+    "CUST-1001": [
+        {
+            "invoice_id": "INV-1001",
+            "amount": 4200,
+            "status": "Paid",
+        },
+        {
+            "invoice_id": "INV-1002",
+            "amount": 850,
+            "status": "Pending",
+        },
+    ],
+    "CUST-1002": [
+        {
+            "invoice_id": "INV-1003",
+            "amount": 250,
+            "status": "Overdue",
+        }
+    ],
+}
+
+
+PAYMENTS = {
+    "CUST-1001": [
+        {
+            "payment_id": "PAY-1001",
+            "amount": 4200,
+            "status": "Completed",
+        },
+        {
+            "payment_id": "PAY-1002",
+            "amount": 850,
+            "status": "Pending",
+        },
+    ],
+    "CUST-1002": [
+        {
+            "payment_id": "PAY-1003",
+            "amount": 250,
+            "status": "Failed",
+        }
+    ],
+}
+
+
+TICKETS = {
+    "CUST-1001": [
+        {
+            "ticket_id": "TCK-1001",
+            "subject": "Monitor delivery",
+            "status": "Open",
+            "priority": "Medium",
+        }
+    ],
+    "CUST-1002": [
+        {
+            "ticket_id": "TCK-1002",
+            "subject": "Keyboard not working",
+            "status": "Open",
+            "priority": "High",
+        }
+    ],
+}
 
 
 # ============================================================

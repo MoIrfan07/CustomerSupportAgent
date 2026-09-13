@@ -1,0 +1,24 @@
+services:
+  api:
+    build: .
+    image: customer-support-agent:latest
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+# NOTE: the checkpointer and approval registry are currently in-memory
+# (InMemorySaver / ApprovalRegistry). That means:
+#   - do NOT run more than one replica of this service — conversation
+#     state and pending approvals would split across instances
+#   - a restart loses all in-flight conversations and pending approvals
+# This is fine for a single-instance deployment or staging, but is a
+# known blocker for horizontal scaling in production. See the project
+# notes on wiring a persistent checkpointer (Postgres) and approval
+# registry (Redis) before scaling beyond one instance.

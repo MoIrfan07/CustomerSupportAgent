@@ -55,26 +55,17 @@ function App() {
   const [loading, setLoading] =
     useState(false);
 
-  const [pendingApprovalId, setPendingApprovalId] =
-    useState<string | null>(null);
-
-
   const [userRole, setUserRole] =
     useState("guest");
 
   const [username, setUsername] =
     useState("guest");
 
-  const [customerId, setCustomerId] =
-    useState("");
-
   const [accessToken, setAccessToken] =
     useState("");
 
   const [showLogin, setShowLogin] =
-    useState(false);
-
-  const [showProfileModal, setShowProfileModal] = useState(false);
+    useState(true);
 
   const [loginUsername, setLoginUsername] =
     useState("");
@@ -88,22 +79,9 @@ function App() {
   const [loginLoading, setLoginLoading] =
     useState(false);
 
-  
-  
-  
   const displayRole =
     userRole.charAt(0).toUpperCase() +
     userRole.slice(1);
-
-  const displayIdentity =
-    userRole === "customer" && customerId
-      ? customerId
-      : displayRole;
-
-  const avatarLabel =
-    userRole === "customer" && customerId
-      ? customerId.replace(/^CUST-/, "C")
-      : displayRole.charAt(0).toUpperCase();
 
   useEffect(() => {
     const storedToken =
@@ -112,115 +90,26 @@ function App() {
     if (!storedToken) {
       setUserRole("guest");
       setUsername("guest");
-      setCustomerId("");
       setAccessToken("");
       setShowLogin(true);
       return;
     }
 
-    const restoreSession = async () => {
-      try {
-        const response = await fetch(
-          "http://127.0.0.1:8000/config",
-          {
-            method: "GET",
-            headers: {
-              Authorization:
-                `Bearer ${storedToken}`,
-            },
-          }
-        );
+    try {
+      const tokenPayload = JSON.parse(
+        atob(storedToken.split(".")[1])
+      );
 
-        if (!response.ok) {
-          throw new Error(
-            "Stored session is no longer valid."
-          );
-        }
+      const currentTime = Math.floor(
+        Date.now() / 1000
+      );
 
-        const data = await response.json();
-
+      if (
+        tokenPayload.exp &&
+        tokenPayload.exp <= currentTime
+      ) {
         console.log(
-          "[AUTH] Restored session:",
-          data.username,
-          "role:",
-          data.role,
-          "customer:",
-          data.customer_id
-        );
-
-        
-
-
-        setAccessToken(storedToken);
-        setUsername(data.username);
-        setUserRole(data.role);
-        setCustomerId(
-          data.customer_id || ""
-        );
-
-        setShowLogin(false);
-
-        try {
-          const historyResponse = await fetch(
-            "http://127.0.0.1:8000/chat/history",
-            {
-              method: "GET",
-              headers: {
-                Authorization:
-                  `Bearer ${storedToken}`,
-              },
-            }
-          );
-
-          if (!historyResponse.ok) {
-            console.warn(
-              "[CHAT] Unable to restore chat history:",
-              historyResponse.status
-            );
-            return;
-          }
-
-          const historyData =
-            await historyResponse.json();
-
-          const restoredMessages: Message[] =
-            (historyData.messages || []).map(
-              (
-                message: {
-                  role: string;
-                  content: string;
-                },
-                index: number
-              ) => ({
-                id: Date.now() + index,
-                role:
-                  message.role === "human"
-                    ? "user"
-                    : "assistant",
-                content: message.content,
-              })
-            );
-
-          setMessages([
-            ...initialMessages,
-            ...restoredMessages,
-          ]);
-        } catch (error) {
-          console.warn(
-            "[CHAT] Chat history could not be restored:",
-            error
-          );
-        }
-
-
-
-
-
-
-      } catch (error) {
-        console.error(
-          "[AUTH] Stored session is invalid:",
-          error
+          "[AUTH] Stored session has expired."
         );
 
         localStorage.removeItem(
@@ -229,14 +118,47 @@ function App() {
 
         setAccessToken("");
         setUsername("guest");
-        setCustomerId("");
         setUserRole("guest");
         setShowLogin(true);
-      }
-    };
 
-    restoreSession();
+        return;
+      }
+
+      console.log(
+        "[AUTH] Restoring stored session:",
+        tokenPayload.sub,
+        "role:",
+        tokenPayload.role
+      );
+
+      setAccessToken(storedToken);
+
+      setUsername(
+        tokenPayload.sub || "guest"
+      );
+
+      setUserRole(
+        tokenPayload.role || "guest"
+      );
+
+      setShowLogin(false);
+    } catch (error) {
+      console.error(
+        "[AUTH] Invalid stored session:",
+        error
+      );
+
+      localStorage.removeItem(
+        ACCESS_TOKEN_KEY
+      );
+
+      setAccessToken("");
+      setUsername("guest");
+      setUserRole("guest");
+      setShowLogin(true);
+    }
   }, []);
+
   const [activities, setActivities] =
     useState<ActivityItem[]>([]);
 
@@ -349,9 +271,17 @@ function App() {
         return;
       }
 
+      const tokenPayload = JSON.parse(
+        atob(data.access_token.split(".")[1])
+      );
+
       console.log(
         "[AUTH] Login successful:",
-        loginUsername.trim()
+        tokenPayload.sub,
+        "role:",
+        tokenPayload.role,
+        "customer:",
+        tokenPayload.customer_id
       );
 
       localStorage.setItem(
@@ -361,40 +291,13 @@ function App() {
 
       setAccessToken(data.access_token);
 
-      setUsername(loginUsername.trim());
-
-      const configResponse = await fetch(
-        "http://127.0.0.1:8000/config",
-        {
-          method: "GET",
-          headers: {
-            Authorization:
-              `Bearer ${data.access_token}`,
-          },
-        }
+      setUsername(
+        tokenPayload.sub ||
+        loginUsername.trim()
       );
 
-      if (!configResponse.ok) {
-        throw new Error(
-          "Unable to load authenticated user information."
-        );
-      }
-
-      const configData = await configResponse.json();
-
-      console.log(
-        "[AUTH] Authenticated user:",
-        configData.username,
-        "role:",
-        configData.role,
-        "customer:",
-        configData.customer_id
-      );
-
-      setUsername(configData.username);
-      setUserRole(configData.role);
-      setCustomerId(
-        configData.customer_id || ""
+      setUserRole(
+        tokenPayload.role || "user"
       );
 
       setShowLogin(false);
@@ -602,11 +505,6 @@ function App() {
         data.user_role || userRole
       );
 
-      if (data.approval_required && data.approval_id) {
-        setPendingApprovalId(data.approval_id);
-      }
-
-
       setMessages((previous) => [
         ...previous,
         {
@@ -666,95 +564,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  const handleApproval = async (
-    approved: boolean
-  ) => {
-    if (!pendingApprovalId || loading) {
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch(
-        `http://127.0.0.1:8000/approvals/${pendingApprovalId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-
-            ...(accessToken
-              ? {
-                Authorization:
-                  `Bearer ${accessToken}`,
-              }
-              : {}),
-          },
-          body: JSON.stringify({
-            approved,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      console.log(
-        "[APPROVAL] Response:",
-        response.status,
-        data
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail?.message ||
-          data.detail ||
-          data.message ||
-          "Approval request failed."
-        );
-      }
-
-      setPendingApprovalId(null);
-
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: Date.now(),
-          role: "assistant",
-          content:
-            data.message ||
-            (
-              approved
-                ? "The operation was approved."
-                : "The operation was rejected."
-            ),
-        },
-      ]);
-    } catch (error) {
-      console.error(
-        "[APPROVAL] Request failed:",
-        error
-      );
-
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Approval request failed.";
-
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: Date.now(),
-          role: "assistant",
-          content: errorMessage,
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
 
   const handleKeyDown = (
     event: React.KeyboardEvent<HTMLTextAreaElement>
@@ -838,7 +647,7 @@ function App() {
           <button
             type="button"
             className="role-card"
-            onClick={() => { }}
+            onClick={openLogin}
             title={
               username
                 ? `Logged in as ${username}`
@@ -848,23 +657,23 @@ function App() {
               width: "100%",
               border: "none",
               textAlign: "left",
-              cursor: "default",
+              cursor: "pointer",
             }}
           >
 
             <div className="role-avatar">
-              {avatarLabel}
+              {displayRole
+                .charAt(0)
+                .toUpperCase()}
             </div>
 
             <div className="role-info">
               <strong>
-                {displayIdentity}
+                {displayRole}
               </strong>
 
               <span>
-                {userRole === "customer"
-                  ? "Customer"
-                  : "Authorized user"}
+                Authorized user
               </span>
             </div>
 
@@ -872,7 +681,7 @@ function App() {
 
           </button>
 
-          {/* {accessToken && (
+          {accessToken && (
             <button
               type="button"
               className="nav-item"
@@ -885,7 +694,7 @@ function App() {
               <LogOut size={17} />
               Logout
             </button>
-          )} */}
+          )}
 
           <div className="system-status">
             <span className="status-dot" />
@@ -920,21 +729,13 @@ function App() {
 
             <div className="security-badge">
               <ShieldCheck size={16} />
-              {userRole === "customer"
-                ? customerId
-                : `${displayRole} access`}
+              {displayRole} access
             </div>
 
             <button
               type="button"
               className="profile"
-              onClick={() => {
-                if (accessToken) {
-                  setShowProfileModal(true);
-                } else {
-                  openLogin();
-                }
-              }}
+              onClick={openLogin}
               title={
                 username
                   ? `Logged in as ${username}`
@@ -948,7 +749,9 @@ function App() {
               }}
             >
               <div className="profile-avatar">
-                {avatarLabel}
+                {displayRole
+                  .charAt(0)
+                  .toUpperCase()}
               </div>
             </button>
 
@@ -1057,58 +860,6 @@ function App() {
 
                 </div>
 
-              )}
-
-              {pendingApprovalId && (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    margin: "0 0 20px 43px",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleApproval(true)}
-                    disabled={loading}
-                    style={{
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "9px 16px",
-                      background: "#16a34a",
-                      color: "#fff",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: loading
-                        ? "not-allowed"
-                        : "pointer",
-                      opacity: loading ? 0.6 : 1,
-                    }}
-                  >
-                    Approve
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleApproval(false)}
-                    disabled={loading}
-                    style={{
-                      border: "1px solid #fecaca",
-                      borderRadius: "8px",
-                      padding: "9px 16px",
-                      background: "#fff",
-                      color: "#dc2626",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: loading
-                        ? "not-allowed"
-                        : "pointer",
-                      opacity: loading ? 0.6 : 1,
-                    }}
-                  >
-                    Reject
-                  </button>
-                </div>
               )}
 
               <div ref={messagesEndRef} />
@@ -1361,52 +1112,7 @@ function App() {
         </div>
 
       </main>
-      {showProfileModal && accessToken && (
-        <div
-          className="profile-modal-overlay"
-          onClick={() => setShowProfileModal(false)}
-        >
-          <div
-            className="profile-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="profile-modal-header">
-              <div className="profile-modal-avatar">
-                {avatarLabel}
-              </div>
 
-              <div>
-                <strong>{displayIdentity}</strong>
-                <span>
-                  {userRole === "customer"
-                    ? "Customer"
-                    : displayRole}
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="profile-logout"
-              onClick={() => {
-                setShowProfileModal(false);
-                logout();
-              }}
-            >
-              <LogOut size={16} />
-              Logout
-            </button>
-
-            <button
-              type="button"
-              className="profile-cancel"
-              onClick={() => setShowProfileModal(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {showLogin && (
 

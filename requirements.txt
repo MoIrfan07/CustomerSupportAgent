@@ -1,8 +1,46 @@
+# ------------------------------------------------------------------
+# Web framework / server
+# ------------------------------------------------------------------
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9   # required by FastAPI's OAuth2PasswordRequestForm
+
+# ------------------------------------------------------------------
+# Settings & validation
+# ------------------------------------------------------------------
+pydantic>=2.7
+pydantic-settings>=2.3
+
+# ------------------------------------------------------------------
+# Auth
+# ------------------------------------------------------------------
+pyjwt>=2.8
+pwdlib[argon2]>=0.2
+
+# ------------------------------------------------------------------
+# LLM / agent stack
+# ------------------------------------------------------------------
 deepagents==0.6.12
-langchain
-langgraph
-langchain-mcp-adapters
-fastmcp
-dashscope
-python-dotenv
-streamlit
+langchain>=0.3
+langchain-core>=0.3
+langchain-openai>=0.2      # used by app/llm.py (ChatOpenAI against Qwen's compat endpoint)
+langgraph>=0.2
+langchain-mcp-adapters>=0.1
+openai>=1.40                # error types (RateLimitError etc.) are caught explicitly in api/main.py
+fastmcp>=2.0
+
+# ------------------------------------------------------------------
+# Utilities
+# ------------------------------------------------------------------
+python-dotenv>=1.0
+
+# ------------------------------------------------------------------
+# Optional / needs confirmation
+# ------------------------------------------------------------------
+# dashscope    -> only needed if DashScope's native SDK is called
+#                 directly somewhere outside app/llm.py. Not referenced
+#                 in any file reviewed so far — confirm before keeping.
+# streamlit    -> removed from runtime deps. This is a FastAPI backend;
+#                 a UI framework has no place in its production
+#                 dependency set. If there's a separate Streamlit demo
+#                 app, give it its own requirements file.

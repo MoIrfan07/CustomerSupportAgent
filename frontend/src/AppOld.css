@@ -150,24 +150,18 @@ button {
 
 .role-avatar,
 .profile-avatar {
-  min-width: 31px;
-  width: max-content;
-  height: 31px;
-  padding: 0 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 50%;
   background: #334155;
   color: #fff;
   font-size: 11px;
   font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .role-avatar {
+  width: 31px;
   height: 31px;
 }
 
@@ -260,9 +254,8 @@ button {
 }
 
 .profile-avatar {
-  min-width: 34px;
+  width: 34px;
   height: 34px;
-  padding: 0 9px;
   background: #2563eb;
 }
 
@@ -917,115 +910,5 @@ button {
 
   .login-popup-header h2 {
     font-size: 18px;
-  }
-}
-
-
-.profile-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1100;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: 62px 27px 0;
-  background: rgba(15, 23, 42, 0.08);
-}
-
-.profile-modal {
-  width: 220px;
-  padding: 14px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.16);
-  animation: profile-modal-in 0.15s ease-out;
-}
-
-.profile-modal-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #eef0f4;
-  margin-bottom: 10px;
-}
-
-.profile-modal-avatar {
-  min-width: 34px;
-  height: 34px;
-  padding: 0 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.profile-modal-header div:last-child {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.profile-modal-header strong {
-  font-size: 11px;
-  color: #172033;
-}
-
-.profile-modal-header span {
-  margin-top: 2px;
-  font-size: 9px;
-  color: #9ca3af;
-}
-
-.profile-logout,
-.profile-cancel {
-  width: 100%;
-  border-radius: 8px;
-  padding: 9px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.profile-logout {
-  border: 1px solid #fecaca;
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.profile-logout:hover {
-  background: #fee2e2;
-}
-
-.profile-cancel {
-  margin-top: 6px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #6b7280;
-}
-
-.profile-cancel:hover {
-  background: #f8fafc;
-}
-
-@keyframes profile-modal-in {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }

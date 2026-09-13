@@ -4,7 +4,6 @@ from app.config import (
     QWEN_API_KEY,
     QWEN_COMPATIBLE_BASE_URL,
     QWEN_MODEL,
-    QWEN_LANGUAGE,
 )
 
 
