@@ -134,6 +134,35 @@ button {
   color: #fff;
 }
 
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 190px;
+  overflow-y: auto;
+  margin: -15px 0 12px;
+  padding: 14px 4px 0 10px;
+}
+
+.conversation-item {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #94a3b8;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  font-size: 11px;
+}
+
+.conversation-item:hover,
+.conversation-item.active {
+  background: #1f2937;
+  color: #fff;
+}
+
 .sidebar-bottom {
   margin-top: auto;
 }
@@ -326,6 +355,7 @@ button {
   flex: 1;
   overflow-y: auto;
   padding: 30px;
+  overscroll-behavior: contain;
 }
 
 .message-row {
@@ -687,12 +717,27 @@ button {
 
   .brand-name,
   .brand-subtitle,
-  .new-chat,
   .nav-item,
   .nav-section,
   .role-info,
   .system-status {
     display: none;
+  }
+
+  .conversation-list {
+    margin: -12px 0 10px;
+    padding: 0;
+  }
+
+  .conversation-item {
+    justify-content: center;
+    padding: 8px 0;
+    font-size: 0;
+  }
+
+  .conversation-item svg {
+    width: 17px;
+    height: 17px;
   }
 
   .brand {
@@ -702,6 +747,13 @@ button {
 
   .brand-icon {
     width: 38px;
+  }
+
+  .new-chat {
+    justify-content: center;
+    padding: 11px 0;
+    width: 100%;
+    font-size: 0;
   }
 
   .nav-item {
@@ -722,6 +774,29 @@ button {
 
   .composer {
     margin: 0 15px;
+  }
+
+  .conversation-header {
+    height: auto;
+    min-height: 68px;
+    padding: 14px 15px;
+  }
+
+  .conversation-header .session-id {
+    display: none;
+  }
+
+  .message-row {
+    max-width: 100%;
+    gap: 8px;
+  }
+
+  .message-content {
+    max-width: calc(100vw - 76px);
+  }
+
+  .message-text {
+    overflow-wrap: anywhere;
   }
 }
 
@@ -983,7 +1058,7 @@ button {
   color: #9ca3af;
 }
 
-.profile-logout,
+.profile-signout,
 .profile-cancel {
   width: 100%;
   border-radius: 8px;
@@ -997,13 +1072,13 @@ button {
   font-weight: 600;
 }
 
-.profile-logout {
+.profile-signout {
   border: 1px solid #fecaca;
   background: #fef2f2;
   color: #dc2626;
 }
 
-.profile-logout:hover {
+.profile-signout:hover {
   background: #fee2e2;
 }
 

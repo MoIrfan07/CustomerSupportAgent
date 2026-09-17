@@ -2,3 +2,6 @@
 .env
 __pycache__/
 *.pyc
+data/user_logs/*.txt
+data/user_logs/**/*.txt
+data/system_logs/*.log

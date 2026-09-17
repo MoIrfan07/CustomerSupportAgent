@@ -15,7 +15,24 @@ import {
   Loader2,
   ChevronRight,
   LogOut,
+  Palette,
 } from "lucide-react";
+import ThemeSwitcher from "./ThemeSwitcher";
+import type { ThemeName } from "./ThemeSwitcher";
+import SettingsPage from "./Settings";
+import MyOrders from "./MyOrders";
+import MyBilling from "./MyBilling";
+import MyTickets from "./MyTickets";
+import Customers from "./Customers";
+import AgentActivity from "./AgentActivity";
+import Approvals from "./Approvals";
+import type { ActivityItem } from "./types";
+import {
+  fetchCustomerData,
+  fetchCustomers,
+  type CustomerRecord,
+  type WorkspaceData,
+} from "./workspaceApi";
 
 import "./App.css";
 
@@ -25,11 +42,9 @@ type Message = {
   content: string;
 };
 
-type ActivityItem = {
-  id: number;
-  label: string;
-  type: "tool" | "agent" | "success" | "approval";
-  status: "running" | "completed" | "waiting";
+type ChatSummary = {
+  chat_id: string;
+  title: string;
 };
 
 const initialMessages: Message[] = [
@@ -42,10 +57,16 @@ const initialMessages: Message[] = [
 ];
 
 const ACCESS_TOKEN_KEY = "customer_support_access_token";
+const THEME_KEY = "customer_support_theme";
+const AVATAR_KEY = "customer_support_avatar";
 
 function App() {
   const [messages, setMessages] =
     useState<Message[]>(initialMessages);
+  const [chatId, setChatId] = useState("chat1");
+  const [chats, setChats] = useState<ChatSummary[]>([
+    { chat_id: "chat1", title: "Chat1" },
+  ]);
 
   const messagesEndRef =
     useRef<HTMLDivElement | null>(null);
@@ -68,11 +89,22 @@ function App() {
   const [customerId, setCustomerId] =
     useState("");
 
+  const [workspaceData, setWorkspaceData] = useState<WorkspaceData>({
+    customer_id: "",
+    orders: [],
+    invoices: [],
+    payments: [],
+    tickets: [],
+  });
+  const [workspaceCustomers, setWorkspaceCustomers] = useState<CustomerRecord[]>([]);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
+
   const [accessToken, setAccessToken] =
     useState("");
 
   const [showLogin, setShowLogin] =
-    useState(false);
+    useState(() => !localStorage.getItem(ACCESS_TOKEN_KEY));
 
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -88,9 +120,69 @@ function App() {
   const [loginLoading, setLoginLoading] =
     useState(false);
 
-  
-  
-  
+  const [theme, setTheme] = useState<ThemeName>(() => {
+    const storedTheme = localStorage.getItem(THEME_KEY);
+    return storedTheme === "ocean" ||
+      storedTheme === "sunset"
+      ? storedTheme
+      : "light";
+  });
+
+  const [showTopbarThemeSwitcher, setShowTopbarThemeSwitcher] =
+    useState(false);
+  const [activePage, setActivePage] = useState<
+    | "conversation"
+    | "settings"
+    | "orders"
+    | "billing"
+    | "tickets"
+    | "customers"
+    | "activity"
+    | "approvals"
+  >("conversation");
+  const [profileAvatar, setProfileAvatar] = useState(() =>
+    localStorage.getItem(AVATAR_KEY) || ""
+  );
+
+  const loadChatHistory = async (
+    selectedChatId: string,
+    token: string,
+  ) => {
+    const response = await fetch(
+      `http://127.0.0.1:8000/chat/history?chat_id=${encodeURIComponent(selectedChatId)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      throw new Error("Unable to load this conversation.");
+    }
+    const historyData = await response.json();
+    const restoredMessages: Message[] = (
+      historyData.messages || []
+    ).map(
+      (
+        message: { role: string; content: string },
+        index: number,
+      ) => ({
+        id: Date.now() + index,
+        role: message.role === "human" ? "user" : "assistant",
+        content: message.content,
+      }),
+    );
+    setChatId(selectedChatId);
+    setMessages([...initialMessages, ...restoredMessages]);
+  };
+
+  useEffect(() => {
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(AVATAR_KEY, profileAvatar);
+  }, [profileAvatar]);
+
+
+
+
   const displayRole =
     userRole.charAt(0).toUpperCase() +
     userRole.slice(1);
@@ -101,20 +193,16 @@ function App() {
       : displayRole;
 
   const avatarLabel =
-    userRole === "customer" && customerId
+    profileAvatar ||
+    (userRole === "customer" && customerId
       ? customerId.replace(/^CUST-/, "C")
-      : displayRole.charAt(0).toUpperCase();
+      : displayRole.charAt(0).toUpperCase());
 
   useEffect(() => {
     const storedToken =
       localStorage.getItem(ACCESS_TOKEN_KEY);
 
     if (!storedToken) {
-      setUserRole("guest");
-      setUsername("guest");
-      setCustomerId("");
-      setAccessToken("");
-      setShowLogin(true);
       return;
     }
 
@@ -148,7 +236,7 @@ function App() {
           data.customer_id
         );
 
-        
+
 
 
         setAccessToken(storedToken);
@@ -159,6 +247,24 @@ function App() {
         );
 
         setShowLogin(false);
+
+        try {
+          const chatsResponse = await fetch(
+            "http://127.0.0.1:8000/chat/chats",
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${storedToken}`,
+              },
+            },
+          );
+          const chatData = await chatsResponse.json();
+          if (Array.isArray(chatData.chats)) {
+            setChats(chatData.chats);
+          }
+        } catch (error) {
+          console.warn("[CHAT] Chat list could not be restored:", error);
+        }
 
         try {
           const historyResponse = await fetch(
@@ -237,6 +343,58 @@ function App() {
 
     restoreSession();
   }, []);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadWorkspaceData = async () => {
+      await Promise.resolve();
+      if (controller.signal.aborted) {
+        return;
+      }
+      setWorkspaceLoading(true);
+      setWorkspaceError("");
+      try {
+        if (userRole === "customer") {
+          const data = await fetchCustomerData(accessToken);
+          if (!controller.signal.aborted) {
+            console.log("[WORKSPACE] Customer data loaded:", {
+              orders: data.orders.length,
+              invoices: data.invoices.length,
+              payments: data.payments.length,
+              tickets: data.tickets.length,
+            });
+            setWorkspaceData(data);
+          }
+        } else if (userRole === "support" || userRole === "manager") {
+          const data = await fetchCustomers(accessToken);
+          if (!controller.signal.aborted) {
+            console.log("[WORKSPACE] Customer directory loaded:", data.customers.length);
+            setWorkspaceCustomers(data.customers);
+          }
+        }
+      } catch (reason) {
+        if (!controller.signal.aborted) {
+          setWorkspaceError(
+            reason instanceof Error
+              ? reason.message
+              : "Workspace data could not be loaded.",
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setWorkspaceLoading(false);
+        }
+      }
+    };
+
+    void loadWorkspaceData();
+    return () => controller.abort();
+  }, [accessToken, userRole]);
   const [activities, setActivities] =
     useState<ActivityItem[]>([]);
 
@@ -428,12 +586,24 @@ function App() {
     setAccessToken("");
     setUsername("guest");
     setUserRole("guest");
+    setCustomerId("");
+    setWorkspaceData({
+      customer_id: "",
+      orders: [],
+      invoices: [],
+      payments: [],
+      tickets: [],
+    });
+    setWorkspaceCustomers([]);
+    setWorkspaceError("");
 
     setLoginUsername("");
     setLoginPassword("");
     setLoginError("");
 
     setMessages(initialMessages);
+    setChats([{ chat_id: "chat1", title: "Chat1" }]);
+    setChatId("chat1");
     setActivities([]);
 
     setCustomer({
@@ -549,7 +719,8 @@ function App() {
           body: JSON.stringify({
             message: text,
             thread_id:
-              "customer-support-session",
+              chatId,
+            chat_id: chatId,
           }),
         }
       );
@@ -768,8 +939,40 @@ function App() {
     }
   };
 
+  const startNewConversation = () => {
+    const nextNumber =
+      Math.max(
+        ...chats.map(
+          (chat) => Number(chat.chat_id.replace("chat", "")) || 0,
+        ),
+        0,
+      ) + 1;
+    const nextChat = `chat${nextNumber}`;
+    setChatId(nextChat);
+    setChats((previous) => [
+      ...previous,
+      { chat_id: nextChat, title: `Chat${nextNumber}` },
+    ]);
+    setMessages(initialMessages);
+    setInput("");
+    setPendingApprovalId(null);
+    setActivePage("conversation");
+  };
+
+  const selectConversation = async (selectedChatId: string) => {
+    if (!accessToken || selectedChatId === chatId) {
+      return;
+    }
+    try {
+      await loadChatHistory(selectedChatId, accessToken);
+      setActivePage("conversation");
+    } catch (error) {
+      console.error("[CHAT] Conversation could not be loaded:", error);
+    }
+  };
+
   return (
-    <div className="app">
+    <div className="app" data-theme={theme}>
 
       {/* ================= SIDEBAR ================= */}
 
@@ -791,42 +994,131 @@ function App() {
           </div>
         </div>
 
-        <button className="new-chat">
+        <button
+          className="new-chat"
+          type="button"
+          onClick={startNewConversation}
+        >
           <MessageSquare size={17} />
           New conversation
         </button>
 
         <nav className="navigation">
 
-          <div className="nav-section">
-            Workspace
-          </div>
-
-          <button className="nav-item active">
+          <button
+            className={`nav-item ${activePage === "conversation" ? "active" : ""
+              }`}
+            type="button"
+            onClick={() => setActivePage("conversation")}
+          >
             <MessageSquare size={18} />
             Conversations
           </button>
 
-          <button className="nav-item">
-            <Users size={18} />
-            Customers
-          </button>
+          <div className="conversation-list">
+            {chats.map((chat) => (
+              <button
+                className={`conversation-item ${chat.chat_id === chatId ? "active" : ""
+                  }`}
+                key={chat.chat_id}
+                type="button"
+                onClick={() => void selectConversation(chat.chat_id)}
+              >
+                <MessageSquare size={14} />
+                {chat.title}
+              </button>
+            ))}
+          </div>
 
-          <button className="nav-item">
-            <Activity size={18} />
-            Agent activity
-          </button>
+          {userRole === "customer" && (
+            <>
+              <div className="nav-section">
+                My support
+              </div>
 
-          <button className="nav-item">
-            <ShieldCheck size={18} />
-            Approvals
-          </button>
+              <button
+                className={`nav-item ${activePage === "orders" ? "active" : ""
+                  }`}
+                type="button"
+                onClick={() => setActivePage("orders")}
+              >
+                <Package size={18} />
+                My orders
+              </button>
+
+              <button
+                className={`nav-item ${activePage === "billing" ? "active" : ""
+                  }`}
+                type="button"
+                onClick={() => setActivePage("billing")}
+              >
+                <CreditCard size={18} />
+                My billing
+              </button>
+
+              <button
+                className={`nav-item ${activePage === "tickets" ? "active" : ""
+                  }`}
+                type="button"
+                onClick={() => setActivePage("tickets")}
+              >
+                <Ticket size={18} />
+                My support tickets
+              </button>
+            </>
+          )}
+
+          {userRole !== "customer" && userRole !== "guest" && (
+            <>
+              <div className="nav-section">
+                Workspace
+              </div>
+
+              <button
+                className={`nav-item ${activePage === "customers" ? "active" : ""
+                  }`}
+                type="button"
+                onClick={() => setActivePage("customers")}
+              >
+                <Users size={18} />
+                Customers
+              </button>
+
+              <button
+                className={`nav-item ${activePage === "activity" ? "active" : ""
+                  }`}
+                type="button"
+                onClick={() => setActivePage("activity")}
+              >
+                <Activity size={18} />
+                Agent activity
+              </button>
+
+              <button
+                className={`nav-item ${activePage === "approvals" ? "active" : ""
+                  }`}
+                type="button"
+                onClick={() => setActivePage("approvals")}
+              >
+                <ShieldCheck size={18} />
+                Approvals
+              </button>
+            </>
+          )}
 
           <div className="nav-section">
             System
           </div>
 
-          <button className="nav-item">
+          <button
+            className={`nav-item ${activePage === "settings" ? "active" : ""
+              }`}
+            type="button"
+            onClick={() => {
+              setActivePage("settings");
+              setShowTopbarThemeSwitcher(false);
+            }}
+          >
             <Settings size={18} />
             Settings
           </button>
@@ -918,6 +1210,30 @@ function App() {
 
           <div className="topbar-actions">
 
+            <div className="topbar-theme">
+              <button
+                type="button"
+                className="topbar-theme-button"
+                onClick={() =>
+                  setShowTopbarThemeSwitcher((visible) => !visible)
+                }
+                aria-label="Change theme"
+                aria-expanded={showTopbarThemeSwitcher}
+                title="Change theme"
+              >
+                <Palette size={17} />
+              </button>
+              {showTopbarThemeSwitcher && (
+                <ThemeSwitcher
+                  theme={theme}
+                  onChange={(nextTheme) => {
+                    setTheme(nextTheme);
+                    setShowTopbarThemeSwitcher(false);
+                  }}
+                />
+              )}
+            </div>
+
             <div className="security-badge">
               <ShieldCheck size={16} />
               {userRole === "customer"
@@ -947,9 +1263,7 @@ function App() {
                 cursor: "pointer",
               }}
             >
-              <div className="profile-avatar">
-                {avatarLabel}
-              </div>
+              <div className="profile-avatar">{avatarLabel}</div>
             </button>
 
           </div>
@@ -959,209 +1273,235 @@ function App() {
 
         {/* CONTENT */}
 
-        <div className="content">
+        {activePage === "settings" ? (
+          <SettingsPage
+            theme={theme}
+            onThemeChange={setTheme}
+            avatar={avatarLabel}
+            onAvatarChange={setProfileAvatar}
+            isAuthenticated={Boolean(accessToken)}
+            onSignIn={openLogin}
+            onSignOut={() => {
+              logout();
+              setActivePage("conversation");
+            }}
+          />
+        ) : activePage === "orders" ? (
+          <MyOrders customerId={customerId} orders={workspaceData.orders} loading={workspaceLoading} error={workspaceError} />
+        ) : activePage === "billing" ? (
+          <MyBilling customerId={customerId} data={workspaceData} loading={workspaceLoading} error={workspaceError} />
+        ) : activePage === "tickets" ? (
+          <MyTickets tickets={workspaceData.tickets} loading={workspaceLoading} error={workspaceError} />
+        ) : activePage === "customers" ? (
+          <Customers customers={workspaceCustomers} loading={workspaceLoading} error={workspaceError} />
+        ) : activePage === "activity" ? (
+          <AgentActivity activities={activities} />
+        ) : activePage === "approvals" ? (
+          <Approvals />
+        ) : (
+          <div className="content">
 
-          {/* CHAT */}
+            {/* CHAT */}
 
-          <section className="chat-section">
+            <section className="chat-section">
 
-            <div className="conversation-header">
+              <div className="conversation-header">
 
-              <div>
+                <div>
 
-                <span className="conversation-label">
-                  AI CONVERSATION
+                  <span className="conversation-label">
+                    AI CONVERSATION
+                  </span>
+
+                  <h2>
+                    Customer Investigation
+                  </h2>
+
+                </div>
+
+                <span className="session-id">
+                  Session active
                 </span>
-
-                <h2>
-                  Customer Investigation
-                </h2>
 
               </div>
 
-              <span className="session-id">
-                Session active
-              </span>
 
-            </div>
+              <div className="messages">
+
+                {messages.map(
+                  (message) => (
+
+                    <div
+                      key={message.id}
+                      className={`message-row ${message.role}`}
+                    >
+
+                      <div className="message-avatar">
+
+                        {message.role ===
+                          "assistant" ? (
+                          <Bot size={17} />
+                        ) : (
+                          <User size={17} />
+                        )}
+
+                      </div>
+
+                      <div className="message-content">
+
+                        <div className="message-author">
+                          {message.role ===
+                            "assistant"
+                            ? "CustomerAI"
+                            : "You"}
+                        </div>
+
+                        <div className="message-text">
+                          {message.content}
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  )
+                )}
 
 
-            <div className="messages">
+                {loading && (
 
-              {messages.map(
-                (message) => (
-
-                  <div
-                    key={message.id}
-                    className={`message-row ${message.role}`}
-                  >
+                  <div className="message-row assistant">
 
                     <div className="message-avatar">
-
-                      {message.role ===
-                        "assistant" ? (
-                        <Bot size={17} />
-                      ) : (
-                        <User size={17} />
-                      )}
-
+                      <Bot size={17} />
                     </div>
 
                     <div className="message-content">
 
                       <div className="message-author">
-                        {message.role ===
-                          "assistant"
-                          ? "CustomerAI"
-                          : "You"}
+                        CustomerAI
                       </div>
 
-                      <div className="message-text">
-                        {message.content}
+                      <div className="thinking">
+
+                        <Loader2
+                          size={16}
+                          className="spin"
+                        />
+
+                        Agent is working...
+
                       </div>
 
                     </div>
 
                   </div>
 
-                )
-              )}
+                )}
 
+                {pendingApprovalId && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      margin: "0 0 20px 43px",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleApproval(true)}
+                      disabled={loading}
+                      style={{
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "9px 16px",
+                        background: "#16a34a",
+                        color: "#fff",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: loading
+                          ? "not-allowed"
+                          : "pointer",
+                        opacity: loading ? 0.6 : 1,
+                      }}
+                    >
+                      Approve
+                    </button>
 
-              {loading && (
-
-                <div className="message-row assistant">
-
-                  <div className="message-avatar">
-                    <Bot size={17} />
+                    <button
+                      type="button"
+                      onClick={() => handleApproval(false)}
+                      disabled={loading}
+                      style={{
+                        border: "1px solid #fecaca",
+                        borderRadius: "8px",
+                        padding: "9px 16px",
+                        background: "#fff",
+                        color: "#dc2626",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: loading
+                          ? "not-allowed"
+                          : "pointer",
+                        opacity: loading ? 0.6 : 1,
+                      }}
+                    >
+                      Reject
+                    </button>
                   </div>
+                )}
 
-                  <div className="message-content">
+                <div ref={messagesEndRef} />
 
-                    <div className="message-author">
-                      CustomerAI
-                    </div>
+              </div>
 
-                    <div className="thinking">
 
-                      <Loader2
-                        size={16}
-                        className="spin"
-                      />
+              {/* INPUT */}
 
-                      Agent is working...
+              <div className="composer">
 
-                    </div>
+                <textarea
+                  value={input}
+                  onChange={(event) =>
+                    setInput(
+                      event.target.value
+                    )
+                  }
+                  onKeyDown={
+                    handleKeyDown
+                  }
+                  placeholder="Ask the customer support agent anything..."
+                  rows={1}
+                />
 
-                  </div>
-
-                </div>
-
-              )}
-
-              {pendingApprovalId && (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    margin: "0 0 20px 43px",
-                  }}
+                <button
+                  className="send-button"
+                  onClick={sendMessage}
+                  disabled={
+                    loading ||
+                    !input.trim()
+                  }
                 >
-                  <button
-                    type="button"
-                    onClick={() => handleApproval(true)}
-                    disabled={loading}
-                    style={{
-                      border: "none",
-                      borderRadius: "8px",
-                      padding: "9px 16px",
-                      background: "#16a34a",
-                      color: "#fff",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: loading
-                        ? "not-allowed"
-                        : "pointer",
-                      opacity: loading ? 0.6 : 1,
-                    }}
-                  >
-                    Approve
-                  </button>
+                  <Send size={18} />
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleApproval(false)}
-                    disabled={loading}
-                    style={{
-                      border: "1px solid #fecaca",
-                      borderRadius: "8px",
-                      padding: "9px 16px",
-                      background: "#fff",
-                      color: "#dc2626",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: loading
-                        ? "not-allowed"
-                        : "pointer",
-                      opacity: loading ? 0.6 : 1,
-                    }}
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
+              </div>
 
-              <div ref={messagesEndRef} />
+              <div className="composer-hint">
+                Press Enter to send ·
+                Shift + Enter for a new line
+              </div>
 
-            </div>
+            </section>
 
 
-            {/* INPUT */}
+            {/* RIGHT PANEL */}
 
-            <div className="composer">
+            <aside className="right-panel">
 
-              <textarea
-                value={input}
-                onChange={(event) =>
-                  setInput(
-                    event.target.value
-                  )
-                }
-                onKeyDown={
-                  handleKeyDown
-                }
-                placeholder="Ask the customer support agent anything..."
-                rows={1}
-              />
+              {/* CUSTOMER */}
 
-              <button
-                className="send-button"
-                onClick={sendMessage}
-                disabled={
-                  loading ||
-                  !input.trim()
-                }
-              >
-                <Send size={18} />
-              </button>
-
-            </div>
-
-            <div className="composer-hint">
-              Press Enter to send ·
-              Shift + Enter for a new line
-            </div>
-
-          </section>
-
-
-          {/* RIGHT PANEL */}
-
-          <aside className="right-panel">
-
-            {/* CUSTOMER */}
-
-            {/* <div className="panel-card">
+              {/* <div className="panel-card">
 
               <div className="panel-title">
                 <span>
@@ -1209,156 +1549,157 @@ function App() {
             </div> */}
 
 
-            {/* QUICK STATS */}
+              {/* QUICK STATS */}
 
-            <div className="panel-card">
+              <div className="panel-card">
 
-              <div className="panel-title">
-                <span>
-                  CUSTOMER OVERVIEW
-                </span>
-              </div>
-
-              <div className="stats-grid">
-
-                <div className="stat">
-                  <Package size={17} />
-                  <strong>—</strong>
-                  <span>Orders</span>
+                <div className="panel-title">
+                  <span>
+                    CUSTOMER OVERVIEW
+                  </span>
                 </div>
 
-                <div className="stat">
-                  <CreditCard size={17} />
-                  <strong>—</strong>
-                  <span>Payments</span>
-                </div>
+                <div className="stats-grid">
 
-                <div className="stat">
-                  <CreditCard size={17} />
-                  <strong>—</strong>
-                  <span>Invoices</span>
-                </div>
-
-                <div className="stat">
-                  <Ticket size={17} />
-                  <strong>—</strong>
-                  <span>Tickets</span>
-                </div>
-
-              </div>
-
-            </div>
-
-
-            {/* AGENT ACTIVITY */}
-
-            <div className="panel-card activity-card">
-
-              <div className="panel-title">
-
-                <span>
-                  ACTIVITY
-                </span>
-
-                <Activity size={16} />
-
-              </div>
-
-              <div className="activity-list">
-
-                {activities.length ===
-                  0 ? (
-
-                  <div className="empty-activity">
-                    Activities will appear here.
+                  <div className="stat">
+                    <Package size={17} />
+                    <strong>—</strong>
+                    <span>Orders</span>
                   </div>
 
-                ) : (
+                  <div className="stat">
+                    <CreditCard size={17} />
+                    <strong>—</strong>
+                    <span>Payments</span>
+                  </div>
 
-                  activities.map(
-                    (activity) => (
+                  <div className="stat">
+                    <CreditCard size={17} />
+                    <strong>—</strong>
+                    <span>Invoices</span>
+                  </div>
 
-                      <div
-                        key={activity.id}
-                        className="activity-item"
-                      >
+                  <div className="stat">
+                    <Ticket size={17} />
+                    <strong>—</strong>
+                    <span>Tickets</span>
+                  </div>
 
-                        <div className="activity-icon">
+                </div>
 
-                          {activity.status ===
-                            "completed" ? (
-                            <CheckCircle2 size={15} />
-                          ) : activity.status ===
-                            "waiting" ? (
-                            <ShieldCheck size={15} />
-                          ) : (
-                            <Loader2
-                              size={15}
-                              className="spin"
-                            />
-                          )}
+              </div>
 
-                        </div>
 
-                        <div>
+              {/* AGENT ACTIVITY */}
 
-                          <strong>
-                            {activity.label}
-                          </strong>
+              <div className="panel-card activity-card">
 
-                          <span>
+                <div className="panel-title">
 
-                            {activity.type ===
-                              "tool"
-                              ? "MCP tool"
-                              : activity.type ===
-                                "agent"
-                                ? "Agent"
+                  <span>
+                    ACTIVITY
+                  </span>
+
+                  <Activity size={16} />
+
+                </div>
+
+                <div className="activity-list">
+
+                  {activities.length ===
+                    0 ? (
+
+                    <div className="empty-activity">
+                      Activities will appear here.
+                    </div>
+
+                  ) : (
+
+                    activities.map(
+                      (activity) => (
+
+                        <div
+                          key={activity.id}
+                          className="activity-item"
+                        >
+
+                          <div className="activity-icon">
+
+                            {activity.status ===
+                              "completed" ? (
+                              <CheckCircle2 size={15} />
+                            ) : activity.status ===
+                              "waiting" ? (
+                              <ShieldCheck size={15} />
+                            ) : (
+                              <Loader2
+                                size={15}
+                                className="spin"
+                              />
+                            )}
+
+                          </div>
+
+                          <div>
+
+                            <strong>
+                              {activity.label}
+                            </strong>
+
+                            <span>
+
+                              {activity.type ===
+                                "tool"
+                                ? "MCP tool"
                                 : activity.type ===
-                                  "approval"
-                                  ? "Approval"
-                                  : "Completed"}
+                                  "agent"
+                                  ? "Agent"
+                                  : activity.type ===
+                                    "approval"
+                                    ? "Approval"
+                                    : "Completed"}
 
-                          </span>
+                            </span>
+
+                          </div>
 
                         </div>
 
-                      </div>
-
+                      )
                     )
-                  )
 
-                )}
+                  )}
 
-              </div>
-
-            </div>
-
-
-            {/* SECURITY */}
-
-            <div className="security-card">
-
-              <ShieldCheck size={19} />
-
-              <div>
-
-                <strong>
-                  Secure session
-                </strong>
-
-                <span>
-                  Authorization and approval
-                  controls are active.
-                </span>
+                </div>
 
               </div>
 
-            </div>
 
-          </aside>
+              {/* SECURITY */}
 
-        </div>
+              <div className="security-card">
+
+                <ShieldCheck size={19} />
+
+                <div>
+
+                  <strong>
+                    Secure session
+                  </strong>
+
+                  <span>
+                    Authorization and approval
+                    controls are active.
+                  </span>
+
+                </div>
+
+              </div>
+
+            </aside>
+
+          </div>
+        )}
 
       </main>
       {showProfileModal && accessToken && (
@@ -1387,14 +1728,14 @@ function App() {
 
             <button
               type="button"
-              className="profile-logout"
+              className="profile-signout"
               onClick={() => {
                 setShowProfileModal(false);
                 logout();
               }}
             >
               <LogOut size={16} />
-              Logout
+              Sign out
             </button>
 
             <button

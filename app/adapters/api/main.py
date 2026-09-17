@@ -1,14 +1,16 @@
 import logging
+import json
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
-import json
 from pathlib import Path
 import openai
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
@@ -28,27 +30,39 @@ from app.application.approval_registry import (
 )
 
 from app.application.session_manager import SessionManager
-from app.infrastructure.container import build_customer_support_container
-from app.config import CORS_ORIGINS
+from app.application.user_conversation_log import UserConversationLog
+from app.config import (
+    CORS_ORIGINS,
+    LANGSMITH_API_KEY,
+    LANGSMITH_ENDPOINT,
+    LANGSMITH_PROJECT,
+    LANGSMITH_TRACING,
+)
 from app.infrastructure.agent_factory import (
     AgentProvider,
 )
 from app.infrastructure.state import (
     ApplicationState,
 )
-from app.mcp_client import (
-    create_mcp_client,
-    get_mcp_tools,
-)
+from app.adapters.mcp_tools import MCPToolProviderAdapter
 from app.observability import (
     clear_request_id,
     set_request_id,
 )
 
 
+SYSTEM_LOG_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "system_logs" / "system.log"
+)
+SYSTEM_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format=("%(asctime)s | %(levelname)s | %(name)s | %(message)s"),
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(SYSTEM_LOG_PATH, encoding="utf-8"),
+    ],
 )
 
 
@@ -59,22 +73,23 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("APPLICATION STARTUP | initializing application")
 
-    mcp_client = create_mcp_client()
+    if LANGSMITH_TRACING or LANGSMITH_API_KEY:
+        if not LANGSMITH_API_KEY:
+            raise RuntimeError(
+                "LANGSMITH_API_KEY is required when LANGSMITH_TRACING=true"
+            )
+        os.environ["LANGSMITH_TRACING"] = "true"
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGSMITH_API_KEY"] = LANGSMITH_API_KEY
+        os.environ["LANGSMITH_PROJECT"] = LANGSMITH_PROJECT
+        os.environ["LANGSMITH_ENDPOINT"] = LANGSMITH_ENDPOINT
+        logger.info("LANGSMITH TRACING | enabled | project=%s", LANGSMITH_PROJECT)
 
-    mcp_tools = await get_mcp_tools(mcp_client)
+    tool_provider = MCPToolProviderAdapter()
+    mcp_client = tool_provider.create_client()
 
-    data_path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "customer_data.json"
+    mcp_tools = await tool_provider.get_tools(mcp_client)
 
-    with data_path.open("r", encoding="utf-8") as file:
-        data = json.load(file)
-
-    services = build_customer_support_container(
-        customers=data["customers"],
-        orders=data["orders"],
-        invoices=data["invoices"],
-        payments=data["payments"],
-        tickets=data["tickets"],
-    )
     checkpointer = InMemorySaver()
 
     approval_registry = ApprovalRegistry()
@@ -92,7 +107,6 @@ async def lifespan(app: FastAPI):
         mcp_client=mcp_client,
         mcp_tools=mcp_tools,
         session_manager=session_manager,
-        services=services,
         agent_provider=agent_provider,
         checkpointer=checkpointer,
         approval_registry=approval_registry,
@@ -141,6 +155,7 @@ register_exception_handlers(app)
 class ChatRequest(BaseModel):
     message: str
     thread_id: str = "default"
+    chat_id: str = "chat1"
 
 
 class ChatResponse(BaseModel):
@@ -237,6 +252,205 @@ async def get_config(
         "username": current_user.username,
         "role": current_user.role,
         "customer_id": current_user.customer_id,
+    }
+
+
+async def _invoke_workspace_agent(
+    request: Request,
+    prompt: str,
+    *,
+    user: User,
+) -> dict[str, Any]:
+    application_state: ApplicationState = request.app.state.application
+    agent = await application_state.agent_provider.get_agent(
+        user_role=user.role,
+        username=user.username,
+        customer_id=user.customer_id,
+    )
+
+    result = await agent.ainvoke(
+        {"messages": [{"role": "user", "content": prompt}]},
+        config={
+            "configurable": {
+                "thread_id": f"{user.username}:workspace-data:{uuid4()}",
+            },
+            "metadata": {"workspace_query": True, "user_role": user.role},
+            "tags": ["customer-support", "workspace-query", user.role],
+        },
+    )
+
+    workspace_results: list[dict[str, Any]] = []
+    for message in result.get("messages", []):
+        if not isinstance(message, (ToolMessage, AIMessage)):
+            continue
+        decoded = _decode_workspace_tool_result(message.content)
+        if decoded is not None:
+            workspace_results.append(decoded)
+
+    if workspace_results:
+        return _merge_workspace_results(workspace_results)
+
+    logger.error(
+        "WORKSPACE AGENT INVALID RESULT | user=%s | message_types=%s",
+        user.username,
+        [type(message).__name__ for message in result.get("messages", [])],
+    )
+    raise HTTPException(
+        status_code=502,
+        detail="The workspace agent did not return structured data.",
+    )
+
+
+def _merge_workspace_results(results: list[dict[str, Any]]) -> dict[str, Any]:
+    merged: dict[str, Any] = {
+        "orders": [],
+        "invoices": [],
+        "payments": [],
+        "tickets": [],
+        "customers": [],
+    }
+
+    def collect(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, nested_value in value.items():
+                if key in merged and isinstance(nested_value, list):
+                    merged[key].extend(nested_value)
+                elif isinstance(nested_value, (dict, list)):
+                    collect(nested_value)
+                elif key == "customer_id" and isinstance(nested_value, str):
+                    merged[key] = nested_value
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    for result in results:
+        collect(result)
+
+    return {
+        key: _deduplicate_records(value, key)
+        if isinstance(value, list)
+        else value
+        for key, value in merged.items()
+    }
+
+
+def _deduplicate_records(value: list[Any], collection_name: str) -> list[Any]:
+    """Keep the first record for each stable workspace identifier."""
+    identifier_fields = {
+        "orders": ("order_id",),
+        "invoices": ("invoice_id",),
+        "payments": ("payment_id",),
+        "tickets": ("ticket_id",),
+        "customers": ("customer_id",),
+    }.get(collection_name, ())
+
+    if not identifier_fields:
+        return value
+
+    unique: list[Any] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            unique.append(item)
+            continue
+
+        identifier = next(
+            (item.get(field) for field in identifier_fields if item.get(field)),
+            None,
+        )
+        if identifier is None:
+            unique.append(item)
+            continue
+
+        key = str(identifier)
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
+
+
+def _decode_workspace_tool_result(result: Any) -> dict[str, Any] | None:
+    """Normalize MCP text/content envelopes into the returned JSON object."""
+    if isinstance(result, dict):
+        if "text" in result and isinstance(result["text"], str):
+            return _decode_workspace_tool_result(result["text"])
+        if "content" in result and len(result) == 1:
+            return _decode_workspace_tool_result(result["content"])
+        return result
+
+    if isinstance(result, str):
+        text = result.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            object_start = text.find("{")
+            object_end = text.rfind("}")
+            if object_start < 0 or object_end <= object_start:
+                return None
+            try:
+                parsed = json.loads(text[object_start : object_end + 1])
+            except json.JSONDecodeError:
+                return None
+        return parsed if isinstance(parsed, dict) else None
+
+    if isinstance(result, list):
+        for item in result:
+            decoded = _decode_workspace_tool_result(item)
+            if decoded is not None:
+                return decoded
+        return None
+
+    content = getattr(result, "content", None)
+    if content is not None:
+        return _decode_workspace_tool_result(content)
+
+    text = getattr(result, "text", None)
+    if isinstance(text, str):
+        return _decode_workspace_tool_result(text)
+
+    return None
+
+
+@app.get("/workspace/customers")
+async def workspace_customers(
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in {"support", "manager"}:
+        raise HTTPException(status_code=403, detail="Customer directory access is restricted.")
+    return await _invoke_workspace_agent(
+        http_request,
+        "Use the list_customers tool and return its complete structured result. "
+        "Do not summarize or invent data.",
+        user=current_user,
+    )
+
+
+@app.get("/workspace/customer-data")
+async def workspace_customer_data(
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.customer_id:
+        raise HTTPException(status_code=403, detail="A customer account is required.")
+
+    result = await _invoke_workspace_agent(
+        http_request,
+        "Use the customer data tools to retrieve orders, invoices, payments, "
+        "and tickets for my authenticated customer account. Return one JSON "
+        "object with keys customer_id, orders, invoices, payments, and tickets. "
+        "Include the complete tool results in those arrays. Return JSON only, "
+        "without Markdown fences or explanatory text. Do not summarize or invent data.",
+        user=current_user,
+    )
+    return {
+        "customer_id": current_user.customer_id,
+        "orders": result.get("orders", []),
+        "invoices": result.get("invoices", []),
+        "payments": result.get("payments", []),
+        "tickets": result.get("tickets", []),
     }
 
 
@@ -436,7 +650,13 @@ async def approve_operation(
         config = {
             "configurable": {
                 "thread_id": approval.thread_id,
-            }
+            },
+            "metadata": {
+                "request_id": request_id,
+                "user_role": approval.role,
+                "approval_resume": True,
+            },
+            "tags": ["customer-support", approval.role, "approval-resume"],
         }
 
         logger.info(
@@ -591,31 +811,26 @@ async def approve_operation(
 @app.get("/chat/history")
 async def chat_history(
     http_request: Request,
+    chat_id: str = "chat1",
     current_user: User | None = Depends(get_optional_current_user),
 ):
-    application_state: ApplicationState = http_request.app.state.application
-
     username = current_user.username if current_user is not None else "guest"
-
-    thread_id = f"{username}:customer-support-session"
-
-    agent = await application_state.agent_provider.get_agent(
-        user_role=(current_user.role if current_user is not None else "guest"),
-        username=username,
-        customer_id=(current_user.customer_id if current_user is not None else None),
-    )
-
-    state = await agent.aget_state(
-        {
-            "configurable": {
-                "thread_id": thread_id,
-            }
-        }
-    )
-
-    messages = state.values.get("messages", [])
+    identifier = current_user.customer_id if current_user and current_user.customer_id else username
+    log = UserConversationLog()
+    try:
+        path = log._chat_path(identifier, chat_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    messages = []
+    if chat_id == "chat1":
+        legacy_path = log._path_for(identifier)
+        if legacy_path.exists():
+            messages.extend(log._read_messages(legacy_path))
+    if path.exists():
+        messages.extend(log._read_messages(path))
 
     return {
+        "chat_id": chat_id,
         "messages": [
             {
                 "role": ("human" if message.type == "human" else "assistant"),
@@ -623,6 +838,25 @@ async def chat_history(
             }
             for message in messages
             if message.type in {"human", "ai"}
+        ],
+    }
+
+
+@app.get("/chat/chats")
+async def chat_list(
+    current_user: User | None = Depends(get_optional_current_user),
+):
+    identifier = (
+        current_user.customer_id if current_user and current_user.customer_id
+        else current_user.username if current_user
+        else "guest"
+    )
+    log = UserConversationLog()
+    chat_ids = log.list_chat_ids(identifier) or ["chat1"]
+    return {
+        "chats": [
+            {"chat_id": chat_id, "title": chat_id.title()}
+            for chat_id in chat_ids
         ]
     }
 
@@ -666,7 +900,9 @@ async def chat(
             customer_id=customer_id,
         )
 
-        thread_id = f"{username}:{request.thread_id}"
+        chat_id = request.chat_id
+        UserConversationLog()._chat_path(customer_id or username, chat_id)
+        thread_id = f"{username}:{chat_id}"
 
         set_approval_context(
             registry=application_state.approval_registry,
@@ -676,10 +912,29 @@ async def chat(
             thread_id=thread_id,
         )
 
+        conversation_context = UserConversationLog().load_compressed_context(
+            customer_id or username,
+            chat_id=chat_id,
+        )
+        input_messages: list[Any] = []
+        if conversation_context is not None:
+            input_messages.append(conversation_context)
+        input_messages.append(
+            {
+                "role": "user",
+                "content": request.message,
+            }
+        )
+
         config = {
             "configurable": {
                 "thread_id": thread_id,
-            }
+            },
+            "metadata": {
+                "request_id": request_id,
+                "user_role": user_role,
+            },
+            "tags": ["customer-support", user_role],
         }
 
         logger.info(
@@ -691,12 +946,7 @@ async def chat(
         try:
             result = await agent.ainvoke(
                 {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": request.message,
-                        }
-                    ]
+                    "messages": input_messages
                 },
                 config=config,
             )
@@ -812,6 +1062,13 @@ async def chat(
             "CHAT RESPONSE | request_id=%s | thread_id=%s",
             request_id,
             thread_id,
+        )
+
+        UserConversationLog().append_turn(
+            customer_id or username,
+            user_message=request.message,
+            assistant_message=response_text,
+            chat_id=chat_id,
         )
 
         return ChatResponse(

@@ -5,14 +5,40 @@
             "name": "Ahmed Khan",
             "email": "ahmed@example.com",
             "status": "Active",
-            "plan": "Premium"
+            "plan": "Premium",
+            "created_at": "2024-01-15"
         },
         "CUST-1002": {
             "customer_id": "CUST-1002",
             "name": "John Smith",
             "email": "john@example.com",
             "status": "Suspended",
-            "plan": "Basic"
+            "plan": "Basic",
+            "created_at": "2024-02-20"
+        },
+        "CUST-1003": {
+            "customer_id": "CUST-1003",
+            "name": "Sara Williams",
+            "email": "sara@example.com",
+            "status": "Active",
+            "plan": "Standard",
+            "created_at": "2024-03-05"
+        },
+        "CUST-1004": {
+            "customer_id": "CUST-1004",
+            "name": "Michael Brown",
+            "email": "michael@example.com",
+            "status": "Active",
+            "plan": "Premium",
+            "created_at": "2024-04-12"
+        },
+        "CUST-1005": {
+            "customer_id": "CUST-1005",
+            "name": "Nadia Ali",
+            "email": "nadia@example.com",
+            "status": "Suspended",
+            "plan": "Basic",
+            "created_at": "2024-05-18"
         }
     },
     "orders": {
@@ -21,13 +47,15 @@
                 "order_id": "ORD-5001",
                 "product": "Laptop",
                 "amount": 4200,
-                "status": "Delivered"
+                "status": "Delivered",
+                "order_date": "2025-11-14"
             },
             {
                 "order_id": "ORD-5002",
                 "product": "Monitor",
                 "amount": 850,
-                "status": "Processing"
+                "status": "Processing",
+                "order_date": "2026-01-28"
             }
         ],
         "CUST-1002": [
@@ -35,7 +63,42 @@
                 "order_id": "ORD-5003",
                 "product": "Keyboard",
                 "amount": 250,
-                "status": "Cancelled"
+                "status": "Cancelled",
+                "order_date": "2025-12-03"
+            }
+        ],
+        "CUST-1003": [
+            {
+                "order_id": "ORD-5004",
+                "product": "Wireless Headset",
+                "amount": 180,
+                "status": "Delivered",
+                "order_date": "2025-10-21"
+            },
+            {
+                "order_id": "ORD-5005",
+                "product": "Webcam",
+                "amount": 320,
+                "status": "Processing",
+                "order_date": "2026-02-09"
+            }
+        ],
+        "CUST-1004": [
+            {
+                "order_id": "ORD-5006",
+                "product": "Standing Desk",
+                "amount": 1250,
+                "status": "Processing",
+                "order_date": "2026-02-17"
+            }
+        ],
+        "CUST-1005": [
+            {
+                "order_id": "ORD-5007",
+                "product": "USB-C Dock",
+                "amount": 210,
+                "status": "Delivered",
+                "order_date": "2025-09-30"
             }
         ]
     },
@@ -44,19 +107,46 @@
             {
                 "invoice_id": "INV-1001",
                 "amount": 4200,
-                "status": "Paid"
+                "status": "Paid",
+                "invoice_date": "2025-11-14"
             },
             {
                 "invoice_id": "INV-1002",
                 "amount": 850,
-                "status": "Pending"
+                "status": "Pending",
+                "invoice_date": "2026-01-28"
             }
         ],
         "CUST-1002": [
             {
                 "invoice_id": "INV-1003",
                 "amount": 250,
-                "status": "Overdue"
+                "status": "Overdue",
+                "invoice_date": "2025-12-03"
+            }
+        ],
+        "CUST-1003": [
+            {
+                "invoice_id": "INV-1004",
+                "amount": 500,
+                "status": "Paid",
+                "invoice_date": "2025-10-21"
+            }
+        ],
+        "CUST-1004": [
+            {
+                "invoice_id": "INV-1005",
+                "amount": 1250,
+                "status": "Pending",
+                "invoice_date": "2026-02-17"
+            }
+        ],
+        "CUST-1005": [
+            {
+                "invoice_id": "INV-1006",
+                "amount": 210,
+                "status": "Overdue",
+                "invoice_date": "2025-09-30"
             }
         ]
     },
@@ -65,19 +155,46 @@
             {
                 "payment_id": "PAY-1001",
                 "amount": 4200,
-                "status": "Completed"
+                "status": "Completed",
+                "payment_date": "2025-11-15"
             },
             {
                 "payment_id": "PAY-1002",
                 "amount": 850,
-                "status": "Pending"
+                "status": "Pending",
+                "payment_date": "2026-01-28"
             }
         ],
         "CUST-1002": [
             {
                 "payment_id": "PAY-1003",
                 "amount": 250,
-                "status": "Failed"
+                "status": "Failed",
+                "payment_date": "2025-12-03"
+            }
+        ],
+        "CUST-1003": [
+            {
+                "payment_id": "PAY-1004",
+                "amount": 500,
+                "status": "Completed",
+                "payment_date": "2025-10-22"
+            }
+        ],
+        "CUST-1004": [
+            {
+                "payment_id": "PAY-1005",
+                "amount": 1250,
+                "status": "Pending",
+                "payment_date": "2026-02-17"
+            }
+        ],
+        "CUST-1005": [
+            {
+                "payment_id": "PAY-1006",
+                "amount": 210,
+                "status": "Failed",
+                "payment_date": "2025-09-30"
             }
         ]
     },
@@ -87,7 +204,8 @@
                 "ticket_id": "TCK-1001",
                 "subject": "Monitor delivery",
                 "status": "Open",
-                "priority": "Medium"
+                "priority": "Medium",
+                "ticket_date": "2026-01-30"
             }
         ],
         "CUST-1002": [
@@ -95,7 +213,35 @@
                 "ticket_id": "TCK-1002",
                 "subject": "Keyboard not working",
                 "status": "Open",
-                "priority": "High"
+                "priority": "High",
+                "ticket_date": "2025-12-05"
+            }
+        ],
+        "CUST-1003": [
+            {
+                "ticket_id": "TCK-1003",
+                "subject": "Webcam setup assistance",
+                "status": "Open",
+                "priority": "Low",
+                "ticket_date": "2026-02-11"
+            }
+        ],
+        "CUST-1004": [
+            {
+                "ticket_id": "TCK-1004",
+                "subject": "Standing desk delivery update",
+                "status": "Open",
+                "priority": "Medium",
+                "ticket_date": "2026-02-19"
+            }
+        ],
+        "CUST-1005": [
+            {
+                "ticket_id": "TCK-1005",
+                "subject": "USB-C dock compatibility",
+                "status": "Closed",
+                "priority": "Medium",
+                "ticket_date": "2025-10-02"
             }
         ]
     }

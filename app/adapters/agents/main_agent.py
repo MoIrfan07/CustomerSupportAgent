@@ -6,16 +6,14 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from app.adapters.agents.middleware.logging_middleware import (
     CustomerSupportLoggingMiddleware,
+    SubagentLoggingMiddleware,
 )
+from app.adapters.agents.prompt_loader import render_prompt_file
 
 from app.adapters.agents.middleware.context_compression_middleware import (
     ContextCompressionMiddleware,
 )
 
-
-from app.adapters.agents.middleware.subagent_logging_middleware import (
-    SubagentLoggingMiddleware,
-)
 
 from app.adapters.agents.middleware.context_inspection_middleware import (
     ContextInspectionMiddleware,
@@ -45,15 +43,12 @@ def load_system_prompt(
 ) -> str:
     """Load and populate the main-agent system prompt."""
 
-    prompt_template = PROMPT_PATH.read_text(
-        encoding="utf-8",
-    )
-
-    return prompt_template.format(
-        USERNAME=username,
-        USER_ROLE=user_role,
-        CUSTOMER_ID=customer_id,
-        QWEN_LANGUAGE=QWEN_LANGUAGE,
+    return render_prompt_file(
+        PROMPT_PATH,
+        username=username,
+        user_role=user_role,
+        customer_id=customer_id,
+        qwen_language=QWEN_LANGUAGE,
     )
 
 
@@ -76,8 +71,6 @@ async def create_customer_support_agent(
     if checkpointer is None:
         checkpointer = InMemorySaver()
 
-    # Build specialist subagents using the MCP tools
-    # that were initialized by the application.
     subagents = build_subagents(
         tools,
         user_role,
@@ -92,11 +85,8 @@ async def create_customer_support_agent(
             user_role=user_role,
             customer_id=customer_id,
         ),
-        # Do NOT give MCP business tools directly
-        # to the main agent.
-        #
         # The main agent delegates through "task".
-        # Specialists receive the appropriate MCP tools.
+        # Specialist agents receive and call the discovered MCP tools.
         subagents=subagents,
         middleware=[
             CustomerSupportLoggingMiddleware(),

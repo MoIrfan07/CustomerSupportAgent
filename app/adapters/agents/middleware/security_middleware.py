@@ -258,7 +258,7 @@ class CustomerAuthorizationMiddleware(AgentMiddleware):
                     )
 
                     return ToolMessage(
-                        content=("You don't have access to this customer's information."),
+                        content="You don't have access to this customer.",
                         tool_call_id=request.tool_call["id"],
                         status="error",
                     )

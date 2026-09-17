@@ -1,6 +1,7 @@
+import os
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,7 +26,7 @@ class Settings(BaseSettings):
     # Qwen / DashScope
     # ------------------------------------------------------------------
 
-    qwen_model: str = "qwen3.8-max"
+    qwen_model: str = "qwen3.7-max-2026-05-17"
     qwen_language: str = "English"
 
     qwen_base_url: str = "https://dashscope-intl.aliyuncs.com/api/v1"
@@ -39,6 +40,19 @@ class Settings(BaseSettings):
         min_length=1,
         validation_alias="DASHSCOPE_API_KEY",
     )
+
+    # LangSmith tracing is opt-in so local development does not require an
+    # external tracing account.
+    langsmith_tracing: bool = False
+    langsmith_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "LANGSMITH_API_KEY",
+            "LANGCHAIN_API_KEY",
+        ),
+    )
+    langsmith_project: str = "customer-support-agent"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
 
     # ------------------------------------------------------------------
     # Authentication
@@ -90,6 +104,22 @@ QWEN_LANGUAGE = _settings.qwen_language
 QWEN_BASE_URL = _settings.qwen_base_url
 QWEN_COMPATIBLE_BASE_URL = _settings.qwen_compatible_base_url
 QWEN_API_KEY = _settings.qwen_api_key
+
+LANGSMITH_TRACING = _settings.langsmith_tracing
+LANGSMITH_API_KEY = _settings.langsmith_api_key
+LANGSMITH_PROJECT = _settings.langsmith_project
+LANGSMITH_ENDPOINT = _settings.langsmith_endpoint
+
+if LANGSMITH_TRACING or LANGSMITH_API_KEY:
+    if not LANGSMITH_API_KEY:
+        raise RuntimeError(
+            "LANGSMITH_API_KEY is required when LANGSMITH_TRACING=true"
+        )
+    os.environ["LANGSMITH_TRACING"] = "true"
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGSMITH_API_KEY"] = LANGSMITH_API_KEY
+    os.environ["LANGSMITH_PROJECT"] = LANGSMITH_PROJECT
+    os.environ["LANGSMITH_ENDPOINT"] = LANGSMITH_ENDPOINT
 
 JWT_SECRET_KEY = _settings.jwt_secret_key
 JWT_ALGORITHM = _settings.jwt_algorithm

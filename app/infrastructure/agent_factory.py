@@ -1,9 +1,10 @@
 from typing import Any
 
 from app.adapters.agents.main_agent import create_customer_support_agent
+from app.ports.agent_port import AgentPort
 
 
-class AgentProvider:
+class AgentProvider(AgentPort):
     """
     Infrastructure-level provider responsible for constructing
     and returning Deep Agent instances.

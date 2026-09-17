@@ -23,9 +23,11 @@ pwdlib[argon2]>=0.2
 deepagents==0.6.12
 langchain>=0.3
 langchain-core>=0.3
+langchain-community>=0.3
 langchain-openai>=0.2      # used by app/llm.py (ChatOpenAI against Qwen's compat endpoint)
 langgraph>=0.2
 langchain-mcp-adapters>=0.1
+langsmith>=0.1
 openai>=1.40                # error types (RateLimitError etc.) are caught explicitly in api/main.py
 fastmcp>=2.0
 

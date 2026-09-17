@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
-from agents.main_agent import create_customer_support_agent
+from app.adapters.agents.main_agent import create_customer_support_agent
 from app.mcp_client import get_mcp_tools
 
 
