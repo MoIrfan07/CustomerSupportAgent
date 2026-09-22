@@ -14,10 +14,8 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# mcp_client.py launches mcp_server.py as a subprocess using the same
-# Python interpreter, resolved relative to app/'s parent directory —
-# so mcp_server.py must ship at the project root alongside api/, app/,
-# agents/, and middleware/.
+# The MCP adapter launches mcp_server.py as a subprocess using the same
+# Python interpreter, resolved relative to the project root.
 COPY . .
 
 RUN useradd --create-home --uid 1000 appuser \
@@ -30,4 +28,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.adapters.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,36 @@
+{
+  "products": [
+    {
+      "product_id": "PROD-1001",
+      "name": "Laptop",
+      "description": "14-inch business laptop",
+      "unit_price": 4200,
+      "currency": "USD",
+      "stock": 12
+    },
+    {
+      "product_id": "PROD-1002",
+      "name": "Monitor",
+      "description": "27-inch 4K monitor",
+      "unit_price": 850,
+      "currency": "USD",
+      "stock": 20
+    },
+    {
+      "product_id": "PROD-1003",
+      "name": "Wireless Headset",
+      "description": "Noise-cancelling wireless headset",
+      "unit_price": 180,
+      "currency": "USD",
+      "stock": 30
+    },
+    {
+      "product_id": "PROD-1004",
+      "name": "Webcam",
+      "description": "1080p USB webcam",
+      "unit_price": 320,
+      "currency": "USD",
+      "stock": 18
+    }
+  ]
+}

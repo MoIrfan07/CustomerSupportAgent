@@ -1,5 +1,7 @@
 from typing import Annotated
+import json
 import os
+from pathlib import Path
 
 from fastapi import (
     Depends,
@@ -8,11 +10,13 @@ from fastapi import (
     Response,
     status,
 )
+
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
     OAuth2PasswordRequestForm,
 )
+
 from pydantic import BaseModel
 from pwdlib import PasswordHash
 
@@ -20,6 +24,7 @@ from app.application.session_manager import (
     SessionManager,
     SessionPrincipal,
 )
+from app.application.user_conversation_log import UserConversationLog
 
 
 # ============================================
@@ -46,65 +51,47 @@ SESSION_COOKIE_SECURE = (
 password_hash = PasswordHash.recommended()
 
 
-# ============================================
-# USERS
-# ============================================
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+CUSTOMER_DATA_PATH = PROJECT_ROOT / "data" / "customer_data.json"
+AUTH_CREDENTIALS_PATH = PROJECT_ROOT / "data" / "auth_credentials.json"
 
-# Authentication owns the account identity.
-# MCP remains the source of truth for customer
-# information.
-#
-# customer_id only establishes ownership:
-#
-# ahmed -> CUST-1001
-# john  -> CUST-1002
-#
-# Customer name, email, plan, status, orders,
-# invoices, payments, tickets, etc. remain in MCP.
-# ============================================
 
-USERS = {
-    "manager": {
-        "username": "manager",
-        "role": "manager",
-        "customer_id": None,
-        "hashed_password": (
-            "$argon2id$v=19$m=65536,t=3,p=4$"
-            "wpwV80k35M0Jz8jGiBf0qQ$"
-            "7zx/9Ca6j062h3qDFZ3B3rgYB0Cycy566zDhgDiOtXo"
-        ),
-    },
-    "support": {
-        "username": "support",
-        "role": "support",
-        "customer_id": None,
-        "hashed_password": (
-            "$argon2id$v=19$m=65536,t=3,p=4$"
-            "FzZbmJUvZJnKIKHRpoB8Dw$"
-            "CG+uusrIdbTVd5ssyyxl8hah5DtOU3eAiEDh8vK+x+E"
-        ),
-    },
-    "ahmed": {
-        "username": "ahmed",
-        "role": "customer",
-        "customer_id": "CUST-1001",
-        "hashed_password": (
-            "$argon2id$v=19$m=65536,t=3,p=4$"
-            "sTZUXNJkKsK0MNpH3D1g7A$"
-            "f95HoLSeL4kRGwFy1xZgMqHC5U4hiR8ucRicxaRKGIc"
-        ),
-    },
-    "john": {
-        "username": "john",
-        "role": "customer",
-        "customer_id": "CUST-1002",
-        "hashed_password": (
-            "$argon2id$v=19$m=65536,t=3,p=4$"
-            "klrUA2VXfCtJIpvmsWB/SQ$"
-            "fDcjMrjmiMfdIdV7hyFMTnNCa6UAebemMRwkeBQIcJo"
-        ),
-    },
-}
+def _load_users() -> dict[str, dict[str, str | None]]:
+    with CUSTOMER_DATA_PATH.open("r", encoding="utf-8") as file:
+        customer_data = json.load(file)
+    with AUTH_CREDENTIALS_PATH.open("r", encoding="utf-8") as file:
+        credentials = json.load(file)
+
+    customers = customer_data.get("customers", {})
+    customer_credentials = {
+        item["customer_id"]: item for item in credentials.get("customers", [])
+    }
+    users: dict[str, dict[str, str | None]] = {}
+
+    for account in credentials.get("staff", []):
+        users[account["username"]] = {
+            "username": account["username"],
+            "role": account["role"],
+            "customer_id": None,
+            "hashed_password": account["hashed_password"],
+        }
+
+    for customer_id, customer in customers.items():
+        account = customer_credentials.get(customer_id)
+        if account is None:
+            continue
+        username = account["username"]
+        users[username] = {
+            "username": username,
+            "role": "customer",
+            "customer_id": customer["customer_id"],
+            "hashed_password": account["hashed_password"],
+        }
+
+    return users
+
+
+USERS = _load_users()
 
 
 # ============================================
@@ -180,11 +167,6 @@ def authenticate_user(
     # Staff and normal account usernames.
     user = get_user(identifier)
 
-    # Customer login using customer ID.
-    #
-    # Example:
-    # CUST-1001 -> ahmed
-    # CUST-1002 -> john
     if user is None:
         user = get_user_by_customer_id(identifier)
 
@@ -372,6 +354,7 @@ async def login(
     )
 
     session = session_manager.create_session(principal)
+    UserConversationLog().ensure_exists(user.customer_id or user.username)
 
     response.set_cookie(
         key=SESSION_COOKIE_NAME,

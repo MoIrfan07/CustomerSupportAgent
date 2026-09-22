@@ -1,13 +1,6 @@
-"""Application ports for external business capabilities."""
+"""Interfaces that decouple application use from delivery adapters."""
 
-from .customer_port import CustomerPort
-from .order_port import OrderPort
-from .billing_port import BillingPort
-from .technical_support_port import TechnicalSupportPort
+from .agent_port import AgentPort
+from .tool_provider_port import ToolProviderPort
 
-__all__ = [
-    "CustomerPort",
-    "OrderPort",
-    "BillingPort",
-    "TechnicalSupportPort",
-]
+__all__ = ["AgentPort", "ToolProviderPort"]

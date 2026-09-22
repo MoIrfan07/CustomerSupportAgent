@@ -29,6 +29,8 @@ class CustomerAuthorizationMiddleware(AgentMiddleware):
             "get_customer",
             "list_customers",
             "get_customer_orders",
+            "list_products",
+            "create_order",
             "get_customer_invoices",
             "get_customer_payments",
             "get_customer_tickets",
@@ -39,6 +41,8 @@ class CustomerAuthorizationMiddleware(AgentMiddleware):
             "get_customer",
             "list_customers",
             "get_customer_orders",
+            "list_products",
+            "create_order",
             "get_customer_invoices",
             "get_customer_payments",
             "get_customer_tickets",
@@ -46,6 +50,8 @@ class CustomerAuthorizationMiddleware(AgentMiddleware):
         "user": {
             "get_customer",
             "get_customer_orders",
+            "list_products",
+            "create_order",
             "get_customer_invoices",
             "get_customer_payments",
             "get_customer_tickets",
@@ -53,6 +59,8 @@ class CustomerAuthorizationMiddleware(AgentMiddleware):
         "customer": {
             "get_customer",
             "get_customer_orders",
+            "list_products",
+            "create_order",
             "get_customer_invoices",
             "get_customer_payments",
             "get_customer_tickets",
@@ -82,6 +90,7 @@ class CustomerAuthorizationMiddleware(AgentMiddleware):
     CUSTOMER_ID_TOOLS = {
         "get_customer",
         "get_customer_orders",
+        "create_order",
         "get_customer_invoices",
         "get_customer_payments",
         "get_customer_tickets",
@@ -258,7 +267,7 @@ class CustomerAuthorizationMiddleware(AgentMiddleware):
                     )
 
                     return ToolMessage(
-                        content=("You don't have access to this customer's information."),
+                        content="You don't have access to this customer.",
                         tool_call_id=request.tool_call["id"],
                         status="error",
                     )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,15 +24,45 @@ mcp = FastMCP("Customer Support MCP Server")
 # ============================================================
 
 DATA_PATH = Path(__file__).resolve().parent / "data" / "customer_data.json"
+PRODUCTS_PATH = Path(__file__).resolve().parent / "data" / "products.json"
+NOTIFICATIONS_PATH = Path(__file__).resolve().parent / "data" / "notifications.json"
 
 with DATA_PATH.open("r", encoding="utf-8") as file:
     DATA = json.load(file)
+with PRODUCTS_PATH.open("r", encoding="utf-8") as file:
+    PRODUCTS = json.load(file)["products"]
 
 CUSTOMERS = DATA["customers"]
 ORDERS = DATA["orders"]
 INVOICES = DATA["invoices"]
 PAYMENTS = DATA["payments"]
 TICKETS = DATA["tickets"]
+
+
+def _append_notification(customer_id: str, message: str, notification_type: str) -> None:
+    NOTIFICATIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    notifications: dict[str, list[dict[str, Any]]] = {}
+    if NOTIFICATIONS_PATH.exists():
+        with NOTIFICATIONS_PATH.open("r", encoding="utf-8") as file:
+            notifications = json.load(file)
+    notifications.setdefault(customer_id, []).append(
+        {
+            "id": f"NTF-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
+            "type": notification_type,
+            "message": message,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "read": False,
+        }
+    )
+    with NOTIFICATIONS_PATH.open("w", encoding="utf-8") as file:
+        json.dump(notifications, file, indent=2)
+
+
+def _persist_catalog_and_orders() -> None:
+    with PRODUCTS_PATH.open("w", encoding="utf-8") as file:
+        json.dump({"products": PRODUCTS}, file, indent=2)
+    with DATA_PATH.open("w", encoding="utf-8") as file:
+        json.dump(DATA, file, indent=2)
 
 
 # ============================================================
@@ -317,6 +348,60 @@ def get_customer_orders(
 # ============================================================
 
 
+# ============================================================
+# PRODUCT AND ORDER CREATION TOOLS
+# ============================================================
+
+
+@mcp.tool
+def list_products() -> dict[str, Any]:
+    """List products currently available for purchase."""
+    available = [product for product in PRODUCTS if product["stock"] > 0]
+    return {"success": True, "products": available}
+
+
+@mcp.tool
+def create_order(
+    customer_id: str,
+    product_id: str,
+    quantity: int = 1,
+) -> dict[str, Any]:
+    """Create an order for an authenticated customer."""
+    resolved_id = get_resolved_customer_id(customer_id)
+    if not resolved_id:
+        return {"success": False, "error": f"Customer '{customer_id}' was not found."}
+    if quantity < 1 or quantity > 20:
+        return {"success": False, "error": "Quantity must be between 1 and 20."}
+
+    product = next((item for item in PRODUCTS if item["product_id"] == product_id), None)
+    if product is None:
+        return {"success": False, "error": f"Product '{product_id}' was not found."}
+    if product["stock"] < quantity:
+        return {"success": False, "error": f"Only {product['stock']} units are available."}
+
+    product["stock"] -= quantity
+    customer_orders = ORDERS.setdefault(resolved_id, [])
+    order_number = max(
+        (int(order["order_id"].split("-")[-1]) for orders in ORDERS.values() for order in orders),
+        default=5000,
+    ) + 1
+    order = {
+        "order_id": f"ORD-{order_number}",
+        "product": product["name"],
+        "product_id": product["product_id"],
+        "quantity": quantity,
+        "amount": product["unit_price"] * quantity,
+        "status": "Processing",
+        "order_date": datetime.now(timezone.utc).date().isoformat(),
+    }
+    customer_orders.append(order)
+    _persist_catalog_and_orders()
+    message = f"Order {order['order_id']} for {quantity} x {product['name']} was placed successfully."
+    _append_notification(resolved_id, message, "order_created")
+    logger.info("MCP MUTATION | order created | customer_id=%s | order_id=%s", resolved_id, order["order_id"])
+    return {"success": True, "message": message, "customer_id": resolved_id, "order": order}
+
+
 @mcp.tool
 def cancel_order(
     customer_id: str,
@@ -378,6 +463,11 @@ def cancel_order(
         }
 
     order["status"] = "Cancelled"
+    _append_notification(
+        resolved_id,
+        f"Order {order_id} was cancelled successfully.",
+        "order_cancelled",
+    )
 
     logger.info(
         "MCP MUTATION | order cancelled | customer_id=%s | order_id=%s",
